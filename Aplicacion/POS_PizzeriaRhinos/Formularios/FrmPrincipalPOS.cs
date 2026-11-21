@@ -21,22 +21,17 @@ namespace POS_PizzeriaRhinos.Formularios
         private readonly List<ModificadorItem> _modificadoresTemp = new();
         private int _contadorGrupoPromo = 1;
 
+        // Vistas principales
+        private Panel viewPos = null!, viewClientes = null!, viewAdmin = null!;
+        private Button navPos = null!, navCli = null!, navAdm = null!;
+
         // Controles POS
         private TextBox txtTelBuscar = null!;
         private Label lblClienteInfo = null!;
-        private ComboBox cmbTipoServicio = null!;
-        private ComboBox cmbRepartidor = null!;
-        private ComboBox cmbCategoria = null!;
+        private ComboBox cmbTipoServicio = null!, cmbRepartidor = null!, cmbCategoria = null!;
         private DataGridView dgvMenu = null!;
-        private CheckBox chkMitad2 = null!;
-        private ComboBox cmbMitad2 = null!;
-        private ComboBox cmbMasa = null!;
-        private CheckBox chkOrillaQueso = null!;
-        private CheckBox chkQuesoExtra = null!;
-        private CheckBox chkPromo2x1 = null!;
-        private ComboBox cmbIngredientes = null!;
-        private ComboBox cmbAccionMod = null!;
-        private ComboBox cmbMitadMod = null!;
+        private CheckBox chkMitad2 = null!, chkOrillaQueso = null!, chkQuesoExtra = null!, chkPromo2x1 = null!;
+        private ComboBox cmbMitad2 = null!, cmbMasa = null!, cmbIngredientes = null!, cmbAccionMod = null!, cmbMitadMod = null!;
         private ListBox lstModificadores = null!;
         private DataGridView dgvCarrito = null!;
         private Label lblTotalVenta = null!;
@@ -54,21 +49,35 @@ namespace POS_PizzeriaRhinos.Formularios
         public FrmPrincipalPOS(Empleado empleado)
         {
             _empleado = empleado;
-            Text = $"Pizzería Rhinos POS | Sesión: {_empleado.Nombre} ({_empleado.Rol})";
-            Size = new Size(1260, 760);
+            Text = $"Pizzería Rhinos POS | {_empleado.Nombre} ({_empleado.Rol})";
+            Size = new Size(1340, 820);
+            MinimumSize = new Size(1240, 760);
             StartPosition = FormStartPosition.CenterScreen;
+            WindowState = FormWindowState.Maximized;
+            BackColor = UITheme.BgBase;
+            ForeColor = UITheme.TextPrimary;
 
-            var tabs = new TabControl { Dock = DockStyle.Fill, Font = new Font("Segoe UI", 9.5f) };
-            var tabPos = new TabPage("1. Punto de Venta (POS)");
-            var tabClientes = new TabPage("2. Clientes e Historial (CRUD)");
-            var tabAdmin = new TabPage("3. Corte, Reparto e Inventario");
+            // 1. Primero crear el contenedor central (Dock.Fill)
+            var contenedor = new Panel
+            {
+                Dock = DockStyle.Fill,
+                Padding = new Padding(16, 12, 16, 16),
+                BackColor = UITheme.BgBase
+            };
 
-            ConstruirTabPOS(tabPos);
-            ConstruirTabClientes(tabClientes);
-            ConstruirTabAdmin(tabAdmin);
+            viewPos = new Panel { Dock = DockStyle.Fill, BackColor = UITheme.BgBase };
+            viewClientes = new Panel { Dock = DockStyle.Fill, BackColor = UITheme.BgBase, Visible = false };
+            viewAdmin = new Panel { Dock = DockStyle.Fill, BackColor = UITheme.BgBase, Visible = false };
 
-            tabs.TabPages.AddRange(new[] { tabPos, tabClientes, tabAdmin });
-            Controls.Add(tabs);
+            ConstruirVistaPOS(viewPos);
+            ConstruirVistaClientes(viewClientes);
+            ConstruirVistaAdmin(viewAdmin);
+
+            contenedor.Controls.AddRange(new Control[] { viewPos, viewClientes, viewAdmin });
+            Controls.Add(contenedor);
+
+            // 2. Después agregar la barra superior (Dock.Top) para que WinForms respete su altura exacta sin tapar nada
+            ConstruirBarraSuperior();
 
             Load += (_, _) =>
             {
@@ -77,93 +86,208 @@ namespace POS_PizzeriaRhinos.Formularios
                 CargarIngredientes();
                 CargarClientes();
                 CargarReporteCorte();
+                CambiarVista(0);
             };
         }
 
-        private void ConstruirTabPOS(TabPage tab)
+        private void ConstruirBarraSuperior()
         {
-            var pnlTop = new Panel { Dock = DockStyle.Top, Height = 85, BackColor = Color.FromArgb(245, 245, 248), Padding = new Padding(10) };
-            pnlTop.Controls.Add(new Label { Text = "Tel. Cliente:", Location = new Point(12, 14), AutoSize = true, Font = new Font("Segoe UI", 9, FontStyle.Bold) });
-            txtTelBuscar = new TextBox { Location = new Point(95, 11), Width = 140 };
-            var btnBuscarCli = new Button { Text = "Buscar Tel.", Location = new Point(242, 10), Width = 95, Height = 26 };
-            btnBuscarCli.Click += BtnBuscarCli_Click;
+            var topBar = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 64,
+                BackColor = UITheme.GlassCard,
+                Padding = new Padding(18, 10, 18, 10)
+            };
+            topBar.Paint += (_, e) =>
+            {
+                using var pen = new Pen(UITheme.GlassBorder, 1);
+                e.Graphics.DrawLine(pen, 0, topBar.Height - 1, topBar.Width, topBar.Height - 1);
+            };
 
-            lblClienteInfo = new Label { Text = "Cliente: Venta de Mostrador (Público General)", Location = new Point(350, 14), AutoSize = true, ForeColor = Color.DarkBlue, Font = new Font("Segoe UI", 9, FontStyle.Bold) };
+            var lblBrand = new Label
+            {
+                Text = "RHINOS POS",
+                Font = new Font("Segoe UI", 14, FontStyle.Bold),
+                ForeColor = UITheme.AccentAmber,
+                Location = new Point(20, 17),
+                AutoSize = true
+            };
 
-            pnlTop.Controls.Add(new Label { Text = "Servicio:", Location = new Point(12, 48), AutoSize = true });
-            cmbTipoServicio = new ComboBox { Location = new Point(95, 45), Width = 140, DropDownStyle = ComboBoxStyle.DropDownList };
-            cmbTipoServicio.Items.AddRange(new[] { "MOSTRADOR", "DOMICILIO" });
-            cmbTipoServicio.SelectedIndex = 0;
-            cmbTipoServicio.SelectedIndexChanged += (_, _) => CargarMenu();
+            navPos = CrearBotonNav("1. Punto de Venta", 185, () => CambiarVista(0));
+            navCli = CrearBotonNav("2. Clientes e Historial", 375, () => CambiarVista(1));
+            navAdm = CrearBotonNav("3. Corte e Inventario", 575, () => CambiarVista(2));
 
-            pnlTop.Controls.Add(new Label { Text = "Repartidor:", Location = new Point(250, 48), AutoSize = true });
-            cmbRepartidor = new ComboBox { Location = new Point(325, 45), Width = 220, DropDownStyle = ComboBoxStyle.DropDownList };
+            var lblSesion = new Label
+            {
+                Text = $"● {_empleado.Nombre}  [{_empleado.Rol}]",
+                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+                ForeColor = UITheme.AccentSuccess,
+                AutoSize = true,
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                Location = new Point(topBar.Width - 310, 21)
+            };
 
-            pnlTop.Controls.Add(new Label { Text = "Categoría:", Location = new Point(565, 48), AutoSize = true });
-            cmbCategoria = new ComboBox { Location = new Point(635, 45), Width = 170, DropDownStyle = ComboBoxStyle.DropDownList };
-            cmbCategoria.Items.AddRange(new[] { "TODAS", "PIZZA", "PIZZA_MOSTRADOR", "CALZONE", "COMPLEMENTO", "BEBIDA" });
-            cmbCategoria.SelectedIndex = 0;
-            cmbCategoria.SelectedIndexChanged += (_, _) => CargarMenu();
+            topBar.Controls.AddRange(new Control[] { lblBrand, navPos, navCli, navAdm, lblSesion });
+            Controls.Add(topBar);
+        }
 
-            pnlTop.Controls.AddRange(new Control[] { txtTelBuscar, btnBuscarCli, lblClienteInfo, cmbTipoServicio, cmbRepartidor, cmbCategoria });
+        private Button CrearBotonNav(string texto, int x, Action onClick)
+        {
+            var btn = new Button
+            {
+                Text = texto,
+                Location = new Point(x, 13),
+                Size = new Size(180, 38)
+            };
+            UITheme.StyleButton(btn, UITheme.GlassElevated, 10);
+            btn.Click += (_, _) => onClick();
+            return btn;
+        }
 
-            // Panel Izquierdo: Catálogo y Configurador de Pizza
-            var pnlIzq = new Panel { Dock = DockStyle.Left, Width = 640, Padding = new Padding(10) };
-            dgvMenu = new DataGridView { Location = new Point(10, 10), Size = new Size(620, 230), ReadOnly = true, SelectionMode = DataGridViewSelectionMode.FullRowSelect, AllowUserToAddRows = false, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill };
+        private void CambiarVista(int index)
+        {
+            viewPos.Visible = index == 0;
+            viewClientes.Visible = index == 1;
+            viewAdmin.Visible = index == 2;
 
-            var grpConfig = new GroupBox { Text = "Configuración de Pizza (Mitades, Modificadores SIN/CON y Fase Final)", Location = new Point(10, 248), Size = new Size(620, 355) };
+            navPos.BackColor = index == 0 ? UITheme.AccentPrimary : UITheme.GlassElevated;
+            navCli.BackColor = index == 1 ? UITheme.AccentPrimary : UITheme.GlassElevated;
+            navAdm.BackColor = index == 2 ? UITheme.AccentPrimary : UITheme.GlassElevated;
+        }
 
-            chkMitad2 = new CheckBox { Text = "Mitad 2:", Location = new Point(12, 26), AutoSize = true };
-            cmbMitad2 = new ComboBox { Location = new Point(90, 23), Width = 210, DropDownStyle = ComboBoxStyle.DropDownList, Enabled = false };
+        private void ConstruirVistaPOS(Panel parent)
+        {
+            // Layout principal: Columna Izquierda (55%) y Columna Derecha (45%)
+            var splitPrincipal = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 2,
+                RowCount = 1,
+                BackColor = UITheme.BgBase
+            };
+            splitPrincipal.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 56f));
+            splitPrincipal.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 44f));
+
+            // --- COLUMNA IZQUIERDA (Catálogo + Configurador) ---
+            var colIzq = new Panel { Dock = DockStyle.Fill, Padding = new Padding(0, 12, 8, 0), BackColor = UITheme.BgBase };
+
+            var cardMenu = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12) };
+            UITheme.StyleGlassCard(cardMenu, 14);
+            dgvMenu = new DataGridView { Dock = DockStyle.Fill };
+            UITheme.StyleGrid(dgvMenu);
+            cardMenu.Controls.Add(dgvMenu);
+
+            var spMenuCfg = new Panel { Dock = DockStyle.Bottom, Height = 12, BackColor = UITheme.BgBase };
+
+            var cardConfig = new Panel { Dock = DockStyle.Bottom, Height = 335, Padding = new Padding(14) };
+            UITheme.StyleGlassCard(cardConfig, 14);
+
+            var lblCfgTitle = new Label
+            {
+                Text = "PERSONALIZACIÓN DE PARTIDA (MITADES, 2X1, INGREDIENTES Y EXTRAS)",
+                Location = new Point(16, 12),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+                ForeColor = UITheme.AccentAmber
+            };
+
+            chkMitad2 = new CheckBox { Text = "Combinar Mitad 2:", Location = new Point(16, 40), AutoSize = true, ForeColor = UITheme.TextPrimary };
+            cmbMitad2 = new ComboBox { Location = new Point(160, 37), Width = 230, DropDownStyle = ComboBoxStyle.DropDownList, Enabled = false };
+            cmbMitad2.BackColor = UITheme.GlassElevated;
+            cmbMitad2.ForeColor = UITheme.TextPrimary;
             chkMitad2.CheckedChanged += (_, _) => cmbMitad2.Enabled = chkMitad2.Checked;
 
-            chkPromo2x1 = new CheckBox { Text = "Aplica Promo 2x1 (Med/Gde/XGde)", Location = new Point(320, 26), AutoSize = true };
+            chkPromo2x1 = new CheckBox
+            {
+                Text = "Promo 2x1 (Med/Gde/XGde)",
+                Location = new Point(415, 40),
+                AutoSize = true,
+                ForeColor = UITheme.AccentSuccess,
+                Font = new Font("Segoe UI", 9, FontStyle.Bold)
+            };
 
-            grpConfig.Controls.Add(new Label { Text = "Masa:", Location = new Point(12, 60), AutoSize = true });
-            cmbMasa = new ComboBox { Location = new Point(90, 57), Width = 130, DropDownStyle = ComboBoxStyle.DropDownList };
+            cardConfig.Controls.Add(new Label { Text = "Masa:", Location = new Point(16, 76), AutoSize = true, ForeColor = UITheme.TextMuted });
+            cmbMasa = new ComboBox { Location = new Point(65, 73), Width = 135, DropDownStyle = ComboBoxStyle.DropDownList };
             cmbMasa.Items.AddRange(new[] { "GRUESA", "DELGADA", "SARTEN" });
             cmbMasa.SelectedIndex = 0;
+            cmbMasa.BackColor = UITheme.GlassElevated;
+            cmbMasa.ForeColor = UITheme.TextPrimary;
 
-            chkOrillaQueso = new CheckBox { Text = "Orilla de Queso (+$)", Location = new Point(240, 59), AutoSize = true };
-            chkQuesoExtra = new CheckBox { Text = "Queso Extra (+$)", Location = new Point(410, 59), AutoSize = true };
+            chkOrillaQueso = new CheckBox { Text = "Orilla de Queso (+$)", Location = new Point(225, 75), AutoSize = true, ForeColor = UITheme.TextPrimary };
+            chkQuesoExtra = new CheckBox { Text = "Queso Extra (+$)", Location = new Point(415, 75), AutoSize = true, ForeColor = UITheme.TextPrimary };
 
-            // Modificadores SIN / CON
-            grpConfig.Controls.Add(new Label { Text = "Ingrediente:", Location = new Point(12, 98), AutoSize = true });
-            cmbIngredientes = new ComboBox { Location = new Point(90, 95), Width = 175, DropDownStyle = ComboBoxStyle.DropDownList };
-            cmbAccionMod = new ComboBox { Location = new Point(272, 95), Width = 70, DropDownStyle = ComboBoxStyle.DropDownList };
+            cardConfig.Controls.Add(new Label { Text = "Ingrediente:", Location = new Point(16, 112), AutoSize = true, ForeColor = UITheme.TextMuted });
+            cmbIngredientes = new ComboBox { Location = new Point(100, 109), Width = 195, DropDownStyle = ComboBoxStyle.DropDownList };
+            cmbIngredientes.BackColor = UITheme.GlassElevated;
+            cmbIngredientes.ForeColor = UITheme.TextPrimary;
+
+            cmbAccionMod = new ComboBox { Location = new Point(303, 109), Width = 72, DropDownStyle = ComboBoxStyle.DropDownList };
             cmbAccionMod.Items.AddRange(new[] { "CON", "SIN" });
             cmbAccionMod.SelectedIndex = 0;
+            cmbAccionMod.BackColor = UITheme.GlassElevated;
+            cmbAccionMod.ForeColor = UITheme.TextPrimary;
 
-            cmbMitadMod = new ComboBox { Location = new Point(348, 95), Width = 105, DropDownStyle = ComboBoxStyle.DropDownList };
+            cmbMitadMod = new ComboBox { Location = new Point(383, 109), Width = 110, DropDownStyle = ComboBoxStyle.DropDownList };
             cmbMitadMod.Items.AddRange(new[] { "COMPLETA", "MITAD_1", "MITAD_2" });
             cmbMitadMod.SelectedIndex = 0;
+            cmbMitadMod.BackColor = UITheme.GlassElevated;
+            cmbMitadMod.ForeColor = UITheme.TextPrimary;
 
-            var btnAddMod = new Button { Text = "+ Ajuste", Location = new Point(460, 94), Width = 75, Height = 26 };
+            var btnAddMod = new Button { Text = "+ Añadir", Location = new Point(502, 108), Size = new Size(80, 27) };
+            UITheme.StyleButton(btnAddMod, UITheme.GlassElevated, 8);
             btnAddMod.Click += BtnAddMod_Click;
-            var btnClearMod = new Button { Text = "Limpiar", Location = new Point(540, 94), Width = 68, Height = 26 };
+
+            var btnClearMod = new Button { Text = "Limpiar", Location = new Point(588, 108), Size = new Size(72, 27) };
+            UITheme.StyleButton(btnClearMod, Color.FromArgb(80, 44, 50), 8);
             btnClearMod.Click += (_, _) => { _modificadoresTemp.Clear(); lstModificadores.Items.Clear(); };
 
-            lstModificadores = new ListBox { Location = new Point(12, 130), Size = new Size(596, 155) };
+            lstModificadores = new ListBox
+            {
+                Location = new Point(16, 144),
+                Size = new Size(644, 120),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+                BackColor = UITheme.GlassElevated,
+                ForeColor = UITheme.TextPrimary,
+                BorderStyle = BorderStyle.None,
+                Font = new Font("Consolas", 9.5f)
+            };
 
             var btnAgregarCarrito = new Button
             {
-                Text = "AGREGAR PARTIDA AL PEDIDO",
-                Location = new Point(12, 295),
-                Size = new Size(596, 44),
-                BackColor = Color.FromArgb(46, 125, 50),
-                ForeColor = Color.White,
-                Font = new Font("Segoe UI", 10, FontStyle.Bold)
+                Text = "＋  AGREGAR PARTIDA AL TICKET",
+                Location = new Point(16, 276),
+                Size = new Size(644, 44),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
             };
+            UITheme.StyleButton(btnAgregarCarrito, UITheme.AccentSuccess, 10);
             btnAgregarCarrito.Click += BtnAgregarCarrito_Click;
 
-            grpConfig.Controls.AddRange(new Control[] { chkMitad2, cmbMitad2, chkPromo2x1, cmbMasa, chkOrillaQueso, chkQuesoExtra, cmbIngredientes, cmbAccionMod, cmbMitadMod, btnAddMod, btnClearMod, lstModificadores, btnAgregarCarrito });
-            pnlIzq.Controls.AddRange(new Control[] { dgvMenu, grpConfig });
+            cardConfig.Controls.AddRange(new Control[] { lblCfgTitle, chkMitad2, cmbMitad2, chkPromo2x1, cmbMasa, chkOrillaQueso, chkQuesoExtra, cmbIngredientes, cmbAccionMod, cmbMitadMod, btnAddMod, btnClearMod, lstModificadores, btnAgregarCarrito });
 
-            // Panel Derecho: Carrito y Cobro
-            var pnlDer = new Panel { Dock = DockStyle.Fill, Padding = new Padding(10) };
-            dgvCarrito = new DataGridView { Location = new Point(10, 10), Size = new Size(565, 450), ReadOnly = true, SelectionMode = DataGridViewSelectionMode.FullRowSelect, AllowUserToAddRows = false, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill };
+            colIzq.Controls.Add(cardMenu);
+            colIzq.Controls.Add(spMenuCfg);
+            colIzq.Controls.Add(cardConfig);
 
-            var btnQuitarLinea = new Button { Text = "Quitar Seleccionado", Location = new Point(10, 470), Size = new Size(165, 34) };
+            // --- COLUMNA DERECHA (Ticket Actual) ---
+            var colDer = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8, 12, 0, 0), BackColor = UITheme.BgBase };
+            var cardTicket = new Panel { Dock = DockStyle.Fill, Padding = new Padding(16) };
+            UITheme.StyleGlassCard(cardTicket, 14);
+
+            var pnlTicketHeader = new Panel { Dock = DockStyle.Top, Height = 34, BackColor = Color.Transparent };
+            pnlTicketHeader.Controls.Add(new Label
+            {
+                Text = "RESUMEN DEL PEDIDO ACTUAL",
+                Location = new Point(0, 4),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+                ForeColor = UITheme.AccentAmber
+            });
+
+            var pnlTicketFooter = new Panel { Dock = DockStyle.Bottom, Height = 112, BackColor = Color.Transparent };
+
+            var btnQuitarLinea = new Button { Text = "Quitar Línea", Location = new Point(0, 10), Size = new Size(140, 36) };
+            UITheme.StyleButton(btnQuitarLinea, UITheme.GlassElevated, 8);
             btnQuitarLinea.Click += (_, _) =>
             {
                 if (dgvCarrito.CurrentRow != null)
@@ -173,118 +297,221 @@ namespace POS_PizzeriaRhinos.Formularios
                 }
             };
 
-            lblTotalVenta = new Label { Text = "TOTAL: $0.00", Location = new Point(280, 472), AutoSize = true, Font = new Font("Segoe UI", 14, FontStyle.Bold), ForeColor = Color.DarkRed };
+            lblTotalVenta = new Label
+            {
+                Text = "TOTAL: $0.00",
+                Location = new Point(220, 10),
+                Size = new Size(320, 36),
+                TextAlign = ContentAlignment.MiddleRight,
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                Font = new Font("Segoe UI", 16, FontStyle.Bold),
+                ForeColor = UITheme.AccentAmber
+            };
 
             var btnConfirmarPedido = new Button
             {
-                Text = "CONFIRMAR Y REGISTRAR PEDIDO EN SGBD",
-                Location = new Point(10, 520),
-                Size = new Size(565, 55),
-                BackColor = Color.FromArgb(211, 47, 47),
-                ForeColor = Color.White,
-                Font = new Font("Segoe UI", 11, FontStyle.Bold)
+                Text = "CONFIRMAR Y COBRAR PEDIDO",
+                Dock = DockStyle.Bottom,
+                Height = 52
             };
+            UITheme.StyleButton(btnConfirmarPedido, UITheme.AccentPrimary, 12);
+            btnConfirmarPedido.Font = new Font("Segoe UI", 11, FontStyle.Bold);
             btnConfirmarPedido.Click += BtnConfirmarPedido_Click;
 
-            pnlDer.Controls.AddRange(new Control[] { dgvCarrito, btnQuitarLinea, lblTotalVenta, btnConfirmarPedido });
+            pnlTicketFooter.Controls.AddRange(new Control[] { btnQuitarLinea, lblTotalVenta, btnConfirmarPedido });
 
-            tab.Controls.Add(pnlDer);
-            tab.Controls.Add(pnlIzq);
-            tab.Controls.Add(pnlTop);
+            dgvCarrito = new DataGridView { Dock = DockStyle.Fill };
+            UITheme.StyleGrid(dgvCarrito);
+
+            cardTicket.Controls.Add(dgvCarrito);
+            cardTicket.Controls.Add(pnlTicketFooter);
+            cardTicket.Controls.Add(pnlTicketHeader);
+            colDer.Controls.Add(cardTicket);
+
+            splitPrincipal.Controls.Add(colIzq, 0, 0);
+            splitPrincipal.Controls.Add(colDer, 1, 0);
+
+            // --- TARJETA SUPERIOR (Cliente, Servicio, Repartidor y Categoría) ---
+            var cardTop = new Panel { Dock = DockStyle.Top, Height = 82, Padding = new Padding(14) };
+            UITheme.StyleGlassCard(cardTop, 14);
+
+            cardTop.Controls.Add(new Label { Text = "TELÉFONO CLIENTE:", Location = new Point(16, 12), AutoSize = true, Font = new Font("Segoe UI", 8, FontStyle.Bold), ForeColor = UITheme.TextMuted });
+            txtTelBuscar = new TextBox { Location = new Point(16, 33), Width = 145 };
+            UITheme.StyleTextBox(txtTelBuscar);
+
+            var btnBuscarCli = new Button { Text = "Buscar", Location = new Point(168, 32), Size = new Size(82, 28) };
+            UITheme.StyleButton(btnBuscarCli, UITheme.AccentAmber, 8);
+            btnBuscarCli.ForeColor = Color.Black;
+            btnBuscarCli.Click += BtnBuscarCli_Click;
+
+            lblClienteInfo = new Label
+            {
+                Text = "Mostrador (Público General)",
+                Location = new Point(265, 35),
+                AutoSize = true,
+                ForeColor = UITheme.TextPrimary,
+                Font = new Font("Segoe UI", 9.5f, FontStyle.Bold)
+            };
+
+            cardTop.Controls.Add(new Label { Text = "MODALIDAD:", Location = new Point(660, 12), AutoSize = true, Font = new Font("Segoe UI", 8, FontStyle.Bold), ForeColor = UITheme.TextMuted });
+            cmbTipoServicio = new ComboBox { Location = new Point(660, 33), Width = 140, DropDownStyle = ComboBoxStyle.DropDownList };
+            cmbTipoServicio.Items.AddRange(new[] { "MOSTRADOR", "DOMICILIO" });
+            cmbTipoServicio.SelectedIndex = 0;
+            cmbTipoServicio.SelectedIndexChanged += (_, _) => CargarMenu();
+            cmbTipoServicio.BackColor = UITheme.GlassElevated;
+            cmbTipoServicio.ForeColor = UITheme.TextPrimary;
+
+            cardTop.Controls.Add(new Label { Text = "REPARTIDOR:", Location = new Point(815, 12), AutoSize = true, Font = new Font("Segoe UI", 8, FontStyle.Bold), ForeColor = UITheme.TextMuted });
+            cmbRepartidor = new ComboBox { Location = new Point(815, 33), Width = 225, DropDownStyle = ComboBoxStyle.DropDownList };
+            cmbRepartidor.BackColor = UITheme.GlassElevated;
+            cmbRepartidor.ForeColor = UITheme.TextPrimary;
+
+            cardTop.Controls.Add(new Label { Text = "CATEGORÍA MENÚ:", Location = new Point(1055, 12), AutoSize = true, Font = new Font("Segoe UI", 8, FontStyle.Bold), ForeColor = UITheme.TextMuted });
+            cmbCategoria = new ComboBox { Location = new Point(1055, 33), Width = 195, DropDownStyle = ComboBoxStyle.DropDownList };
+            cmbCategoria.Items.AddRange(new[] { "TODAS", "PIZZA", "PIZZA_MOSTRADOR", "CALZONE", "COMPLEMENTO", "BEBIDA" });
+            cmbCategoria.SelectedIndex = 0;
+            cmbCategoria.SelectedIndexChanged += (_, _) => CargarMenu();
+            cmbCategoria.BackColor = UITheme.GlassElevated;
+            cmbCategoria.ForeColor = UITheme.TextPrimary;
+
+            cardTop.Controls.AddRange(new Control[] { txtTelBuscar, btnBuscarCli, lblClienteInfo, cmbTipoServicio, cmbRepartidor, cmbCategoria });
+
+            // Orden de acoplamiento correcto: primero Fill, al final Top
+            parent.Controls.Add(splitPrincipal);
+            parent.Controls.Add(cardTop);
         }
 
-        private void ConstruirTabClientes(TabPage tab)
+        private void ConstruirVistaClientes(Panel parent)
         {
-            var pnlForm = new Panel { Dock = DockStyle.Left, Width = 380, Padding = new Padding(12), BackColor = Color.FromArgb(248, 248, 250) };
-            int y = 15;
-            Label AddField(string label, out TextBox tb)
+            var colForm = new Panel { Dock = DockStyle.Left, Width = 390, Padding = new Padding(0, 0, 12, 0), BackColor = UITheme.BgBase };
+            var cardForm = new Panel { Dock = DockStyle.Fill, Padding = new Padding(16) };
+            UITheme.StyleGlassCard(cardForm, 14);
+
+            int y = 16;
+            void AddField(string label, out TextBox tb)
             {
-                var l = new Label { Text = label, Location = new Point(12, y), AutoSize = true };
-                tb = new TextBox { Location = new Point(12, y + 20), Width = 345 };
-                pnlForm.Controls.Add(l);
-                pnlForm.Controls.Add(tb);
-                y += 52;
-                return l;
+                var l = new Label { Text = label, Location = new Point(16, y), AutoSize = true, Font = new Font("Segoe UI", 8, FontStyle.Bold), ForeColor = UITheme.TextMuted };
+                tb = new TextBox { Location = new Point(16, y + 20), Width = 340 };
+                UITheme.StyleTextBox(tb);
+                cardForm.Controls.Add(l);
+                cardForm.Controls.Add(tb);
+                y += 54;
             }
 
-            AddField("Teléfono (Único)*:", out txtCliTel);
-            AddField("Nombre Completo*:", out txtCliNom);
-            AddField("Calle*:", out txtCliCalle);
-            AddField("Número Casa*:", out txtCliNum);
-            AddField("Colonia*:", out txtCliCol);
-            AddField("Entre Calles:", out txtCliEntre);
-            AddField("Referencias Visuales:", out txtCliRef);
+            AddField("TELÉFONO (ÚNICO)*", out txtCliTel);
+            AddField("NOMBRE COMPLETO*", out txtCliNom);
+            AddField("CALLE*", out txtCliCalle);
+            AddField("NÚMERO CASA*", out txtCliNum);
+            AddField("COLONIA*", out txtCliCol);
+            AddField("ENTRE CALLES", out txtCliEntre);
+            AddField("REFERENCIAS VISUALES", out txtCliRef);
 
-            var btnGuardarCli = new Button { Text = "Guardar Cliente", Location = new Point(12, y + 5), Size = new Size(165, 36), BackColor = Color.FromArgb(25, 118, 210), ForeColor = Color.White };
+            var btnGuardarCli = new Button { Text = "Guardar Cliente", Location = new Point(16, y + 8), Size = new Size(165, 38) };
+            UITheme.StyleButton(btnGuardarCli, UITheme.AccentSuccess, 10);
             btnGuardarCli.Click += BtnGuardarCli_Click;
 
-            var btnNuevoCli = new Button { Text = "Limpiar / Nuevo", Location = new Point(192, y + 5), Size = new Size(165, 36) };
+            var btnNuevoCli = new Button { Text = "Nuevo / Limpiar", Location = new Point(191, y + 8), Size = new Size(165, 38) };
+            UITheme.StyleButton(btnNuevoCli, UITheme.GlassElevated, 10);
             btnNuevoCli.Click += (_, _) => LimpiarFormCliente();
 
-            var btnEliminarCli = new Button { Text = "Eliminar Cliente", Location = new Point(12, y + 48), Size = new Size(345, 32), BackColor = Color.Firebrick, ForeColor = Color.White };
+            var btnEliminarCli = new Button { Text = "Eliminar Cliente", Location = new Point(16, y + 54), Size = new Size(340, 34) };
+            UITheme.StyleButton(btnEliminarCli, UITheme.AccentPrimary, 10);
             btnEliminarCli.Click += BtnEliminarCli_Click;
 
-            pnlForm.Controls.AddRange(new Control[] { btnGuardarCli, btnNuevoCli, btnEliminarCli });
+            cardForm.Controls.AddRange(new Control[] { btnGuardarCli, btnNuevoCli, btnEliminarCli });
+            colForm.Controls.Add(cardForm);
 
-            var pnlLista = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12) };
-            pnlLista.Controls.Add(new Label { Text = "Buscar por teléfono, nombre o colonia:", Location = new Point(12, 14), AutoSize = true });
-            txtCliFiltro = new TextBox { Location = new Point(250, 11), Width = 250 };
+            var colLista = new Panel { Dock = DockStyle.Fill, BackColor = UITheme.BgBase };
+            var cardLista = new Panel { Dock = DockStyle.Fill, Padding = new Padding(16) };
+            UITheme.StyleGlassCard(cardLista, 14);
+
+            cardLista.Controls.Add(new Label { Text = "BUSCAR CLIENTE (TELÉFONO / NOMBRE / COLONIA):", Location = new Point(16, 18), AutoSize = true, Font = new Font("Segoe UI", 8.5f, FontStyle.Bold), ForeColor = UITheme.AccentAmber });
+            txtCliFiltro = new TextBox { Location = new Point(355, 14), Width = 280 };
+            UITheme.StyleTextBox(txtCliFiltro);
             txtCliFiltro.TextChanged += (_, _) => CargarClientes();
 
-            dgvClientes = new DataGridView { Location = new Point(12, 45), Size = new Size(820, 320), ReadOnly = true, SelectionMode = DataGridViewSelectionMode.FullRowSelect, AllowUserToAddRows = false, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill };
+            dgvClientes = new DataGridView { Location = new Point(16, 52), Size = new Size(860, 320), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
+            UITheme.StyleGrid(dgvClientes);
             dgvClientes.CellClick += DgvClientes_CellClick;
 
-            pnlLista.Controls.Add(new Label { Text = "Historial de Pedidos del Cliente Seleccionado:", Location = new Point(12, 378), AutoSize = true, Font = new Font("Segoe UI", 9.5f, FontStyle.Bold) });
-            dgvHistorialCli = new DataGridView { Location = new Point(12, 405), Size = new Size(820, 240), ReadOnly = true, AllowUserToAddRows = false, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill };
+            cardLista.Controls.Add(new Label { Text = "HISTORIAL DE PEDIDOS DEL CLIENTE SELECCIONADO", Location = new Point(16, 390), AutoSize = true, Font = new Font("Segoe UI", 8.5f, FontStyle.Bold), ForeColor = UITheme.AccentAmber });
+            dgvHistorialCli = new DataGridView { Location = new Point(16, 418), Size = new Size(860, 260), Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right };
+            UITheme.StyleGrid(dgvHistorialCli);
 
-            pnlLista.Controls.AddRange(new Control[] { txtCliFiltro, dgvClientes, dgvHistorialCli });
-            tab.Controls.Add(pnlLista);
-            tab.Controls.Add(pnlForm);
+            cardLista.Controls.AddRange(new Control[] { txtCliFiltro, dgvClientes, dgvHistorialCli });
+            colLista.Controls.Add(cardLista);
+
+            parent.Controls.Add(colLista);
+            parent.Controls.Add(colForm);
         }
 
-        private void ConstruirTabAdmin(TabPage tab)
+        private void ConstruirVistaAdmin(Panel parent)
         {
-            var pnlTop = new Panel { Dock = DockStyle.Top, Height = 55, Padding = new Padding(10), BackColor = Color.FromArgb(245, 245, 248) };
-            pnlTop.Controls.Add(new Label { Text = "Servicio:", Location = new Point(12, 16), AutoSize = true });
-            cmbFiltroServicio = new ComboBox { Location = new Point(75, 13), Width = 130, DropDownStyle = ComboBoxStyle.DropDownList };
+            var cardTop = new Panel { Dock = DockStyle.Top, Height = 64, Padding = new Padding(14) };
+            UITheme.StyleGlassCard(cardTop, 14);
+
+            cardTop.Controls.Add(new Label { Text = "Servicio:", Location = new Point(16, 20), AutoSize = true, ForeColor = UITheme.TextMuted });
+            cmbFiltroServicio = new ComboBox { Location = new Point(80, 17), Width = 135, DropDownStyle = ComboBoxStyle.DropDownList };
             cmbFiltroServicio.Items.AddRange(new[] { "TODOS", "DOMICILIO", "MOSTRADOR" });
             cmbFiltroServicio.SelectedIndex = 0;
+            cmbFiltroServicio.BackColor = UITheme.GlassElevated;
+            cmbFiltroServicio.ForeColor = UITheme.TextPrimary;
 
-            pnlTop.Controls.Add(new Label { Text = "Estado:", Location = new Point(220, 16), AutoSize = true });
-            cmbFiltroEstado = new ComboBox { Location = new Point(275, 13), Width = 150, DropDownStyle = ComboBoxStyle.DropDownList };
+            cardTop.Controls.Add(new Label { Text = "Estado:", Location = new Point(230, 20), AutoSize = true, ForeColor = UITheme.TextMuted });
+            cmbFiltroEstado = new ComboBox { Location = new Point(285, 17), Width = 155, DropDownStyle = ComboBoxStyle.DropDownList };
             cmbFiltroEstado.Items.AddRange(new[] { "TODOS", "EN_PREPARACION", "EN_RUTA", "ENTREGADO", "CANCELADO" });
             cmbFiltroEstado.SelectedIndex = 0;
+            cmbFiltroEstado.BackColor = UITheme.GlassElevated;
+            cmbFiltroEstado.ForeColor = UITheme.TextPrimary;
 
-            var btnFiltrar = new Button { Text = "Consultar Corte", Location = new Point(440, 12), Width = 130, Height = 27 };
+            var btnFiltrar = new Button { Text = "Actualizar Corte", Location = new Point(455, 15), Size = new Size(135, 32) };
+            UITheme.StyleButton(btnFiltrar, UITheme.GlassElevated, 8);
             btnFiltrar.Click += (_, _) => CargarReporteCorte();
 
-            pnlTop.Controls.Add(new Label { Text = "Asignar Repartidor (SP):", Location = new Point(600, 16), AutoSize = true });
-            cmbRepartidorDespacho = new ComboBox { Location = new Point(755, 13), Width = 190, DropDownStyle = ComboBoxStyle.DropDownList };
+            cardTop.Controls.Add(new Label { Text = "Repartidor (SP):", Location = new Point(625, 20), AutoSize = true, ForeColor = UITheme.TextMuted });
+            cmbRepartidorDespacho = new ComboBox { Location = new Point(735, 17), Width = 205, DropDownStyle = ComboBoxStyle.DropDownList };
+            cmbRepartidorDespacho.BackColor = UITheme.GlassElevated;
+            cmbRepartidorDespacho.ForeColor = UITheme.TextPrimary;
 
-            var btnDespachar = new Button { Text = "Despachar a Ruta", Location = new Point(955, 12), Width = 140, Height = 27, BackColor = Color.DarkOrange, ForeColor = Color.White };
+            var btnDespachar = new Button { Text = "Despachar a Ruta", Location = new Point(950, 15), Size = new Size(155, 32) };
+            UITheme.StyleButton(btnDespachar, UITheme.AccentAmber, 8);
+            btnDespachar.ForeColor = Color.Black;
             btnDespachar.Click += BtnDespachar_Click;
 
-            pnlTop.Controls.AddRange(new Control[] { cmbFiltroServicio, cmbFiltroEstado, btnFiltrar, cmbRepartidorDespacho, btnDespachar });
+            cardTop.Controls.AddRange(new Control[] { cmbFiltroServicio, cmbFiltroEstado, btnFiltrar, cmbRepartidorDespacho, btnDespachar });
 
-            dgvCorte = new DataGridView { Dock = DockStyle.Top, Height = 330, ReadOnly = true, SelectionMode = DataGridViewSelectionMode.FullRowSelect, AllowUserToAddRows = false, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill };
+            var sp1 = new Panel { Dock = DockStyle.Top, Height = 12, BackColor = UITheme.BgBase };
+            var cardCorte = new Panel { Dock = DockStyle.Top, Height = 320, Padding = new Padding(12) };
+            UITheme.StyleGlassCard(cardCorte, 14);
+            dgvCorte = new DataGridView { Dock = DockStyle.Fill };
+            UITheme.StyleGrid(dgvCorte);
+            cardCorte.Controls.Add(dgvCorte);
 
-            var pnlBottom = new Panel { Dock = DockStyle.Fill, Padding = new Padding(10) };
-            pnlBottom.Controls.Add(new Label { Text = "Control de Inventario: Disponibilidad de Ingredientes (Sin Gramaje) y Stock de Bebidas", Location = new Point(12, 8), AutoSize = true, Font = new Font("Segoe UI", 9.5f, FontStyle.Bold) });
-            dgvIngredientesAdmin = new DataGridView { Location = new Point(12, 35), Size = new Size(560, 210), ReadOnly = true, SelectionMode = DataGridViewSelectionMode.FullRowSelect, AllowUserToAddRows = false, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill };
+            var sp2 = new Panel { Dock = DockStyle.Top, Height = 12, BackColor = UITheme.BgBase };
+            var cardInv = new Panel { Dock = DockStyle.Fill, Padding = new Padding(14) };
+            UITheme.StyleGlassCard(cardInv, 14);
 
-            var btnToggleIng = new Button { Text = "Activar / Desactivar Ingrediente Agotado", Location = new Point(590, 45), Size = new Size(260, 38) };
+            cardInv.Controls.Add(new Label { Text = "CONTROL DE INGREDIENTES (SIN GRAMAJE) Y STOCK DE REFRESCOS", Location = new Point(16, 12), AutoSize = true, Font = new Font("Segoe UI", 9, FontStyle.Bold), ForeColor = UITheme.AccentAmber });
+            dgvIngredientesAdmin = new DataGridView { Location = new Point(16, 40), Size = new Size(580, 210), Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left };
+            UITheme.StyleGrid(dgvIngredientesAdmin);
+
+            var btnToggleIng = new Button { Text = "Activar / Desactivar Ingrediente Agotado", Location = new Point(620, 48), Size = new Size(280, 40) };
+            UITheme.StyleButton(btnToggleIng, UITheme.AccentPrimary, 10);
             btnToggleIng.Click += BtnToggleIng_Click;
 
-            pnlBottom.Controls.Add(new Label { Text = "Reabastecer Stock Bebida Seleccionada en POS:", Location = new Point(590, 105), AutoSize = true });
-            numNuevoStock = new NumericUpDown { Location = new Point(590, 130), Width = 100, Minimum = 0, Maximum = 500, Value = 24 };
-            var btnActualizarStock = new Button { Text = "Actualizar Stock", Location = new Point(700, 128), Size = new Size(150, 28) };
+            cardInv.Controls.Add(new Label { Text = "Reabastecer Stock de Bebida seleccionada en Punto de Venta:", Location = new Point(620, 110), AutoSize = true, ForeColor = UITheme.TextMuted });
+            numNuevoStock = new NumericUpDown { Location = new Point(620, 138), Width = 110, Minimum = 0, Maximum = 500, Value = 24, BackColor = UITheme.GlassElevated, ForeColor = UITheme.TextPrimary };
+            var btnActualizarStock = new Button { Text = "Guardar Stock", Location = new Point(740, 135), Size = new Size(160, 32) };
+            UITheme.StyleButton(btnActualizarStock, UITheme.AccentSuccess, 8);
             btnActualizarStock.Click += BtnActualizarStock_Click;
 
-            pnlBottom.Controls.AddRange(new Control[] { dgvIngredientesAdmin, btnToggleIng, numNuevoStock, btnActualizarStock });
+            cardInv.Controls.AddRange(new Control[] { dgvIngredientesAdmin, btnToggleIng, numNuevoStock, btnActualizarStock });
 
-            tab.Controls.Add(pnlBottom);
-            tab.Controls.Add(dgvCorte);
-            tab.Controls.Add(pnlTop);
+            parent.Controls.Add(cardInv);
+            parent.Controls.Add(sp2);
+            parent.Controls.Add(cardCorte);
+            parent.Controls.Add(sp1);
+            parent.Controls.Add(cardTop);
         }
 
         // --- LÓGICA OPERATIVA ---
@@ -307,7 +534,19 @@ namespace POS_PizzeriaRhinos.Formularios
             var dt = _pedidoDao.ObtenerMenuActivo(cat, srv);
             dgvMenu.DataSource = dt;
 
-            // Cargar especialidades para Mitad 2
+            // Ocultar columnas técnicas internas para que la tabla se vea limpia y legible
+            string[] ocultar = { "id_producto_precio", "id_producto", "id_tamano", "max_ingredientes_base", "variante" };
+            foreach (var col in ocultar)
+            {
+                if (dgvMenu.Columns.Contains(col)) dgvMenu.Columns[col].Visible = false;
+            }
+            if (dgvMenu.Columns.Contains("producto")) dgvMenu.Columns["producto"].HeaderText = "Producto / Especialidad";
+            if (dgvMenu.Columns.Contains("categoria")) dgvMenu.Columns["categoria"].HeaderText = "Categoría";
+            if (dgvMenu.Columns.Contains("tamano_presentacion")) dgvMenu.Columns["tamano_presentacion"].HeaderText = "Tamaño";
+            if (dgvMenu.Columns.Contains("aplica_promocion_2x1")) dgvMenu.Columns["aplica_promocion_2x1"].HeaderText = "2x1";
+            if (dgvMenu.Columns.Contains("precio")) dgvMenu.Columns["precio"].HeaderText = "Precio ($)";
+            if (dgvMenu.Columns.Contains("stock_actual")) dgvMenu.Columns["stock_actual"].HeaderText = "Stock";
+
             var dtPizzas = _pedidoDao.ObtenerMenuActivo("PIZZA", srv);
             var especialidades = dtPizzas.DefaultView.ToTable(true, "id_producto", "producto");
             cmbMitad2.DataSource = especialidades;
@@ -333,13 +572,15 @@ namespace POS_PizzeriaRhinos.Formularios
             _clienteActual = _clienteDao.BuscarPorTelefono(txtTelBuscar.Text);
             if (_clienteActual != null)
             {
-                lblClienteInfo.Text = $"Cliente: {_clienteActual.Nombre} | Dir: {_clienteActual.Calle} #{_clienteActual.NumeroCasa}, {_clienteActual.Colonia}";
+                lblClienteInfo.Text = $"{_clienteActual.Nombre}  •  {_clienteActual.Calle} #{_clienteActual.NumeroCasa}, {_clienteActual.Colonia}";
+                lblClienteInfo.ForeColor = UITheme.AccentSuccess;
                 cmbTipoServicio.SelectedItem = "DOMICILIO";
             }
             else
             {
-                lblClienteInfo.Text = "Cliente no registrado. Regístralo en la pestaña '2. Clientes e Historial'.";
-                MessageBox.Show("Teléfono no encontrado. Puedes darlo de alta en la pestaña '2. Clientes e Historial'.", "Cliente Nuevo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                lblClienteInfo.Text = "No registrado (Dar de alta en Clientes)";
+                lblClienteInfo.ForeColor = UITheme.AccentPrimary;
+                MessageBox.Show("Teléfono no encontrado. Puedes registrarlo en la pestaña '2. Clientes e Historial'.", "Cliente Nuevo", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
 
@@ -368,7 +609,7 @@ namespace POS_PizzeriaRhinos.Formularios
                 MitadAplicada = mitad,
                 CostoAplicado = costo
             });
-            lstModificadores.Items.Add($"{accion} {nomIng} ({mitad}) -> +${costo:0.00}");
+            lstModificadores.Items.Add($"[{accion}] {nomIng,-20} ({mitad,-8})  +${costo:0.00}");
         }
 
         private void BtnAgregarCarrito_Click(object? sender, EventArgs e)
@@ -397,7 +638,7 @@ namespace POS_PizzeriaRhinos.Formularios
             if (chkQuesoExtra.Checked) extras += _pedidoDao.ObtenerTarifaOpcionFinal(idTam, "QUESO_EXTRA");
 
             bool esSegundoDel2x1 = chkPromo2x1.Checked && _carrito.Count(c => c.EsPromocion2x1) % 2 == 1;
-            if (esSegundoDel2x1) precioBase = 0m; // Segunda pizza del par 2x1 sin costo base, solo cobra sus extras
+            if (esSegundoDel2x1) precioBase = 0m;
 
             var item = new ItemCarrito
             {
@@ -472,7 +713,7 @@ namespace POS_PizzeriaRhinos.Formularios
 
                 _carrito.Clear();
                 RefrescarCarrito();
-                CargarMenu(); // Refresca stock de bebidas descontado por el Trigger
+                CargarMenu();
                 CargarReporteCorte();
             }
             catch (Exception ex)
@@ -481,7 +722,6 @@ namespace POS_PizzeriaRhinos.Formularios
             }
         }
 
-        // --- CRUD CLIENTES ---
         private void CargarClientes() => dgvClientes.DataSource = _clienteDao.ListarTodos(txtCliFiltro.Text);
 
         private void DgvClientes_CellClick(object? sender, DataGridViewCellEventArgs e)
@@ -528,7 +768,8 @@ namespace POS_PizzeriaRhinos.Formularios
                 int id = _clienteDao.Guardar(c);
                 c.IdCliente = id;
                 _clienteActual = c;
-                lblClienteInfo.Text = $"Cliente: {c.Nombre} | Dir: {c.Calle} #{c.NumeroCasa}, {c.Colonia}";
+                lblClienteInfo.Text = $"{c.Nombre}  •  {c.Calle} #{c.NumeroCasa}, {c.Colonia}";
+                lblClienteInfo.ForeColor = UITheme.AccentSuccess;
                 MessageBox.Show("Cliente guardado correctamente.", "Éxito", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 LimpiarFormCliente();
                 CargarClientes();
@@ -561,7 +802,6 @@ namespace POS_PizzeriaRhinos.Formularios
             txtCliTel.Clear(); txtCliNom.Clear(); txtCliCalle.Clear(); txtCliNum.Clear(); txtCliCol.Clear(); txtCliEntre.Clear(); txtCliRef.Clear();
         }
 
-        // --- CORTE E INVENTARIO ---
         private void CargarReporteCorte()
         {
             string srv = cmbFiltroServicio.SelectedItem?.ToString() == "TODOS" ? "" : cmbFiltroServicio.SelectedItem?.ToString() ?? "";
@@ -599,7 +839,7 @@ namespace POS_PizzeriaRhinos.Formularios
         {
             if (dgvMenu.CurrentRow == null || dgvMenu.CurrentRow.Cells["stock_actual"].Value == DBNull.Value)
             {
-                MessageBox.Show("Selecciona una bebida en la pestaña 1 (POS) para actualizar su stock.", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show("Selecciona una bebida en la vista 1 (Punto de Venta) para actualizar su stock.", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             int idPp = Convert.ToInt32(dgvMenu.CurrentRow.Cells["id_producto_precio"].Value);

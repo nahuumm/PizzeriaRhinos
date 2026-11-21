@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 using POS_PizzeriaRhinos.Datos;
 using POS_PizzeriaRhinos.Modelos;
@@ -18,57 +19,91 @@ namespace POS_PizzeriaRhinos.Formularios
         public FrmLogin()
         {
             Text = "Pizzería Rhinos - Acceso al Sistema POS";
-            Size = new Size(420, 310);
+            Size = new Size(460, 390);
             StartPosition = FormStartPosition.CenterScreen;
-            FormBorderStyle = FormBorderStyle.FixedDialog;
-            MaximizeBox = false;
-            BackColor = Color.FromArgb(30, 30, 36);
-            ForeColor = Color.White;
+            FormBorderStyle = FormBorderStyle.None;
+            BackColor = UITheme.BgBase;
+            ForeColor = UITheme.TextPrimary;
+            UITheme.ApplyRoundedCorners(this, 20);
 
-            var lblTitulo = new Label
+            // Halo decorativo superior tipo Glassmorphism
+            Paint += (_, e) =>
             {
-                Text = "PIZZERÍA RHINOS - POS",
-                Font = new Font("Segoe UI", 15, FontStyle.Bold),
-                ForeColor = Color.FromArgb(255, 165, 0),
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                using var brush = new LinearGradientBrush(
+                    new Rectangle(0, 0, Width, 150),
+                    Color.FromArgb(65, 239, 83, 80),
+                    Color.FromArgb(0, 16, 18, 26),
+                    90f);
+                e.Graphics.FillRectangle(brush, 0, 0, Width, 150);
+                UITheme.PaintGlassBorder(e, this, 20);
+            };
+
+            var btnCerrar = new Button
+            {
+                Text = "✕",
+                Location = new Point(415, 12),
+                Size = new Size(32, 32),
+                FlatStyle = FlatStyle.Flat,
+                ForeColor = UITheme.TextMuted,
+                BackColor = Color.Transparent,
+                Cursor = Cursors.Hand
+            };
+            btnCerrar.FlatAppearance.BorderSize = 0;
+            btnCerrar.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
+
+            var lblMarca = new Label
+            {
+                Text = "PIZZERÍA RHINOS",
+                Font = new Font("Segoe UI", 17, FontStyle.Bold),
+                ForeColor = UITheme.AccentAmber,
                 AutoSize = false,
                 TextAlign = ContentAlignment.MiddleCenter,
-                Dock = DockStyle.Top,
-                Height = 55
+                Location = new Point(30, 26),
+                Size = new Size(400, 34),
+                BackColor = Color.Transparent
             };
 
             var lblSub = new Label
             {
-                Text = "Acceso exclusivo para Cajeras y Administrador",
-                Font = new Font("Segoe UI", 9, FontStyle.Italic),
-                ForeColor = Color.LightGray,
+                Text = "PUNTO DE VENTA & ADMINISTRACIÓN",
+                Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+                ForeColor = UITheme.TextMuted,
                 AutoSize = false,
                 TextAlign = ContentAlignment.MiddleCenter,
-                Location = new Point(20, 55),
-                Size = new Size(365, 22)
+                Location = new Point(30, 60),
+                Size = new Size(400, 20),
+                BackColor = Color.Transparent
             };
 
-            var lblUsr = new Label { Text = "Usuario:", Location = new Point(55, 95), AutoSize = true, Font = new Font("Segoe UI", 10) };
-            txtUsuario = new TextBox { Location = new Point(55, 118), Size = new Size(295, 27), Font = new Font("Segoe UI", 10), Text = "cajera1" };
+            // Tarjeta central Glass
+            var card = new Panel
+            {
+                Location = new Point(40, 95),
+                Size = new Size(380, 255)
+            };
+            UITheme.StyleGlassCard(card, 16);
 
-            var lblPwd = new Label { Text = "Contraseña:", Location = new Point(55, 155), AutoSize = true, Font = new Font("Segoe UI", 10) };
-            txtContrasena = new TextBox { Location = new Point(55, 178), Size = new Size(295, 27), Font = new Font("Segoe UI", 10), UseSystemPasswordChar = true, Text = "caja123" };
+            var lblUsr = new Label { Text = "USUARIO DE CAJA / ADMIN", Location = new Point(28, 24), AutoSize = true, Font = new Font("Segoe UI", 8, FontStyle.Bold), ForeColor = UITheme.TextMuted };
+            txtUsuario = new TextBox { Location = new Point(28, 45), Size = new Size(324, 30), Text = "cajera1" };
+            UITheme.StyleTextBox(txtUsuario);
+
+            var lblPwd = new Label { Text = "CONTRASEÑA", Location = new Point(28, 92), AutoSize = true, Font = new Font("Segoe UI", 8, FontStyle.Bold), ForeColor = UITheme.TextMuted };
+            txtContrasena = new TextBox { Location = new Point(28, 113), Size = new Size(324, 30), UseSystemPasswordChar = true, Text = "caja123" };
+            UITheme.StyleTextBox(txtContrasena);
 
             btnIngresar = new Button
             {
-                Text = "Iniciar Turno",
-                Location = new Point(55, 220),
-                Size = new Size(295, 36),
-                BackColor = Color.FromArgb(211, 47, 47),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("Segoe UI", 10, FontStyle.Bold),
-                Cursor = Cursors.Hand
+                Text = "INICIAR TURNO",
+                Location = new Point(28, 170),
+                Size = new Size(324, 44)
             };
-            btnIngresar.FlatAppearance.BorderSize = 0;
+            UITheme.StyleButton(btnIngresar, UITheme.AccentPrimary, 12);
             btnIngresar.Click += BtnIngresar_Click;
             AcceptButton = btnIngresar;
 
-            Controls.AddRange(new Control[] { lblTitulo, lblSub, lblUsr, txtUsuario, lblPwd, txtContrasena, btnIngresar });
+            card.Controls.AddRange(new Control[] { lblUsr, txtUsuario, lblPwd, txtContrasena, btnIngresar });
+            Controls.AddRange(new Control[] { btnCerrar, lblMarca, lblSub, card });
         }
 
         private void BtnIngresar_Click(object? sender, EventArgs e)
