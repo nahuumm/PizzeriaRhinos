@@ -19,91 +19,126 @@ namespace POS_PizzeriaRhinos.Formularios
         public FrmLogin()
         {
             Text = "Pizzería Rhinos - Acceso al Sistema POS";
-            Size = new Size(460, 390);
+            Size = new Size(480, 490);
             StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.None;
             BackColor = UITheme.BgBase;
             ForeColor = UITheme.TextPrimary;
-            UITheme.ApplyRoundedCorners(this, 20);
+            UITheme.ApplyRoundedCorners(this, 22);
 
-            // Halo decorativo superior tipo Glassmorphism
             Paint += (_, e) =>
             {
                 e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
                 using var brush = new LinearGradientBrush(
-                    new Rectangle(0, 0, Width, 150),
-                    Color.FromArgb(65, 239, 83, 80),
-                    Color.FromArgb(0, 16, 18, 26),
+                    new Rectangle(0, 0, Width, 190),
+                    Color.FromArgb(85, 217, 56, 58),
+                    Color.FromArgb(0, 18, 20, 28),
                     90f);
-                e.Graphics.FillRectangle(brush, 0, 0, Width, 150);
-                UITheme.PaintGlassBorder(e, this, 20);
+                e.Graphics.FillRectangle(brush, 0, 0, Width, 190);
+                UITheme.PaintGlassBorder(e, this, 22);
             };
 
             var btnCerrar = new Button
             {
                 Text = "✕",
-                Location = new Point(415, 12),
-                Size = new Size(32, 32),
+                Location = new Point(432, 12),
+                Size = new Size(34, 34),
                 FlatStyle = FlatStyle.Flat,
                 ForeColor = UITheme.TextMuted,
                 BackColor = Color.Transparent,
-                Cursor = Cursors.Hand
+                Cursor = Cursors.Hand,
+                Font = new Font("Segoe UI", 11f, FontStyle.Bold)
             };
             btnCerrar.FlatAppearance.BorderSize = 0;
             btnCerrar.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
 
-            var lblMarca = new Label
+            // Contenedor superior con el Logo Oficial de Rhinos Pizza
+            var pnlLogo = new Panel
             {
-                Text = "PIZZERÍA RHINOS",
-                Font = new Font("Segoe UI", 17, FontStyle.Bold),
-                ForeColor = UITheme.AccentAmber,
-                AutoSize = false,
-                TextAlign = ContentAlignment.MiddleCenter,
-                Location = new Point(30, 26),
-                Size = new Size(400, 34),
-                BackColor = Color.Transparent
+                Location = new Point(55, 22),
+                Size = new Size(370, 125),
+                BackColor = Color.White
             };
+            UITheme.ApplyRoundedCorners(pnlLogo, 16);
+
+            var picLogo = new PictureBox
+            {
+                Dock = DockStyle.Fill,
+                SizeMode = PictureBoxSizeMode.Zoom,
+                BackColor = Color.White,
+                Image = UITheme.CargarLogoRhinos()
+            };
+
+            if (picLogo.Image == null)
+            {
+                var lblFallback = new Label
+                {
+                    Text = "RHINOS PIZZA\nEs Rica y Crujiente!",
+                    Dock = DockStyle.Fill,
+                    TextAlign = ContentAlignment.MiddleCenter,
+                    Font = new Font("Segoe UI", 16f, FontStyle.Bold),
+                    ForeColor = UITheme.AccentPrimary
+                };
+                pnlLogo.Controls.Add(lblFallback);
+            }
+            else
+            {
+                pnlLogo.Controls.Add(picLogo);
+            }
 
             var lblSub = new Label
             {
-                Text = "PUNTO DE VENTA & ADMINISTRACIÓN",
-                Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
-                ForeColor = UITheme.TextMuted,
+                Text = "PUNTO DE VENTA, REPARTO E INVENTARIO",
+                Font = new Font("Segoe UI", 9f, FontStyle.Bold),
+                ForeColor = UITheme.AccentAmber,
                 AutoSize = false,
                 TextAlign = ContentAlignment.MiddleCenter,
-                Location = new Point(30, 60),
-                Size = new Size(400, 20),
+                Location = new Point(30, 156),
+                Size = new Size(420, 22),
                 BackColor = Color.Transparent
             };
 
-            // Tarjeta central Glass
             var card = new Panel
             {
-                Location = new Point(40, 95),
-                Size = new Size(380, 255)
+                Location = new Point(40, 188),
+                Size = new Size(400, 268)
             };
-            UITheme.StyleGlassCard(card, 16);
+            UITheme.StyleGlassCard(card, 18);
 
-            var lblUsr = new Label { Text = "USUARIO DE CAJA / ADMIN", Location = new Point(28, 24), AutoSize = true, Font = new Font("Segoe UI", 8, FontStyle.Bold), ForeColor = UITheme.TextMuted };
-            txtUsuario = new TextBox { Location = new Point(28, 45), Size = new Size(324, 30), Text = "cajera1" };
+            var lblUsr = new Label
+            {
+                Text = "USUARIO DE CAJA / ADMINISTRADOR",
+                Location = new Point(28, 24),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+                ForeColor = UITheme.TextMuted
+            };
+            txtUsuario = new TextBox { Location = new Point(28, 48), Size = new Size(344, 34), Text = "cajera1" };
             UITheme.StyleTextBox(txtUsuario);
 
-            var lblPwd = new Label { Text = "CONTRASEÑA", Location = new Point(28, 92), AutoSize = true, Font = new Font("Segoe UI", 8, FontStyle.Bold), ForeColor = UITheme.TextMuted };
-            txtContrasena = new TextBox { Location = new Point(28, 113), Size = new Size(324, 30), UseSystemPasswordChar = true, Text = "caja123" };
+            var lblPwd = new Label
+            {
+                Text = "CONTRASEÑA",
+                Location = new Point(28, 98),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+                ForeColor = UITheme.TextMuted
+            };
+            txtContrasena = new TextBox { Location = new Point(28, 122), Size = new Size(344, 34), UseSystemPasswordChar = true, Text = "caja123" };
             UITheme.StyleTextBox(txtContrasena);
 
             btnIngresar = new Button
             {
-                Text = "INICIAR TURNO",
-                Location = new Point(28, 170),
-                Size = new Size(324, 44)
+                Text = "INICIAR TURNO EN CAJA",
+                Location = new Point(28, 182),
+                Size = new Size(344, 52)
             };
-            UITheme.StyleButton(btnIngresar, UITheme.AccentPrimary, 12);
+            UITheme.StyleButton(btnIngresar, UITheme.AccentPrimary, 12, 11f);
             btnIngresar.Click += BtnIngresar_Click;
             AcceptButton = btnIngresar;
 
             card.Controls.AddRange(new Control[] { lblUsr, txtUsuario, lblPwd, txtContrasena, btnIngresar });
-            Controls.AddRange(new Control[] { btnCerrar, lblMarca, lblSub, card });
+            Controls.AddRange(new Control[] { btnCerrar, pnlLogo, lblSub, card });
         }
 
         private void BtnIngresar_Click(object? sender, EventArgs e)
@@ -129,7 +164,7 @@ namespace POS_PizzeriaRhinos.Formularios
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error de conexión con la base de datos: {ex.Message}", "Error SGBD", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"Error de conexión con la base de datos:\n{ex.Message}", "Error SGBD", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
     }
