@@ -7,6 +7,9 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>cbccb41e-e005-46a7-9b3d-cf62269965ec</UserSecretsId>
+    <ApplicationIcon>Recursos\rhinos.ico</ApplicationIcon>
+    <ApplicationHighDpiMode>SystemAware</ApplicationHighDpiMode>
+    <AssemblyTitle>Rhinos Pizza - Punto de Venta</AssemblyTitle>
   </PropertyGroup>
 
   <ItemGroup>
@@ -14,8 +17,9 @@
     <PackageReference Include="MySql.Data" Version="26.10.0" />
   </ItemGroup>
 
+  <!-- Logo e ícono: se copian junto al .exe para que la interfaz los cargue en tiempo de ejecución -->
   <ItemGroup>
-    <None Update="Formularios\Assets\logo_rhinos.jpg">
+    <None Update="Recursos\**\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

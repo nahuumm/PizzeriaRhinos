@@ -19,6 +19,8 @@ namespace POS_PizzeriaRhinos.Modelos
         public bool EsPromocion2x1 { get; set; }
         public int? GrupoPromo { get; set; }
         public decimal PrecioBase { get; set; }
+        /// <summary>Precio de lista antes de aplicar el 2x1 (solo informativo para el ticket).</summary>
+        public decimal PrecioLista { get; set; }
         public decimal CostoExtras { get; set; }
         public decimal SubtotalLinea => (PrecioBase + CostoExtras) * Cantidad;
         public List<ModificadorItem> Modificadores { get; set; } = new();
