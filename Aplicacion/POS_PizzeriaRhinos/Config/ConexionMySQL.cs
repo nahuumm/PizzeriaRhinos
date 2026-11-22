@@ -1,29 +1,43 @@
 ﻿using System;
+using System.Reflection;
+using Microsoft.Extensions.Configuration;
 using MySql.Data.MySqlClient;
 
 namespace POS_PizzeriaRhinos.Config
 {
     public static class ConexionMySQL
     {
-        // Cadena de conexión centralizada hacia la base de datos aislada pizzeria_rhinos
-        private static readonly string CadenaConexion =
-            "Server=127.0.0.1;Port=3306;Database=pizzeria_rhinos;Uid=root;Password=Rama2122;CharSet=utf8mb4;";
+        private static readonly IConfigurationRoot Configuracion = new ConfigurationBuilder()
+            .AddUserSecrets(Assembly.GetExecutingAssembly(), optional: true)
+            .Build();
+
+        private static string ObtenerCadenaConexion()
+        {
+            string? cadena = Configuracion.GetConnectionString("PizzeriaRhinosDB");
+
+            if (string.IsNullOrWhiteSpace(cadena))
+            {
+                throw new InvalidOperationException(
+                    "No se encontró la cadena de conexión 'ConnectionStrings:PizzeriaRhinosDB'. " +
+                    "Configura 'Administrar secretos de usuario' (secrets.json) en Visual Studio.");
+            }
+
+            return cadena;
+        }
 
         public static MySqlConnection ObtenerConexion()
         {
-            return new MySqlConnection(CadenaConexion);
+            return new MySqlConnection(ObtenerCadenaConexion());
         }
 
         public static bool ProbarConexion(out string mensaje)
         {
             try
             {
-                using (var conn = ObtenerConexion())
-                {
-                    conn.Open();
-                    mensaje = $"Conexión exitosa a '{conn.Database}' (MySQL {conn.ServerVersion}).";
-                    return true;
-                }
+                using var conn = ObtenerConexion();
+                conn.Open();
+                mensaje = $"Conexión exitosa a '{conn.Database}' (MySQL {conn.ServerVersion}).";
+                return true;
             }
             catch (Exception ex)
             {
