@@ -94,6 +94,7 @@ namespace POS_PizzeriaRhinos.Datos
                         ELSE p1.nombre
                     END AS Producto_Especialidad,
                     tp.nombre AS Tamaño,
+                    p1.categoria AS Categoria,
                     pp.variante AS Variante,
                     COALESCE(dp.tipo_masa, 'GRUESA') AS Masa,
                     CASE WHEN dp.con_orilla_queso THEN 'Sí' ELSE 'No' END AS Orilla_Queso,
@@ -121,7 +122,7 @@ namespace POS_PizzeriaRhinos.Datos
                 WHERE dp.id_pedido = @idPedido
                 GROUP BY 
                     dp.id_detalle, dp.cantidad, dp.id_producto_mitad2, p1.nombre, p2.nombre,
-                    tp.nombre, pp.variante, dp.tipo_masa, dp.con_orilla_queso, dp.con_queso_extra,
+                    tp.nombre, p1.categoria, pp.variante, dp.tipo_masa, dp.con_orilla_queso, dp.con_queso_extra,
                     dp.es_promocion_2x1, dp.grupo_promo, dp.subtotal_linea
                 ORDER BY dp.id_detalle ASC;";
 
