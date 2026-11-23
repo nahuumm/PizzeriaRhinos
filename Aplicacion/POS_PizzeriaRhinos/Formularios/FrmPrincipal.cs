@@ -83,7 +83,12 @@ namespace POS_PizzeriaRhinos.Formularios
             };
             _picLogo.Click += (_, _) => Navegar("inicio");
 
-            _contenedorNav = new Panel { Dock = DockStyle.Fill, Padding = UITheme.P(12, 10, 12, 10) };
+            // Sección intermedia con desplazamiento vertical: el logo (arriba) y la tarjeta de usuario (abajo) quedan fijos
+            _contenedorNav = new Panel { Dock = DockStyle.Fill, Padding = UITheme.P(12, 10, 12, 10), AutoScroll = true };
+            _contenedorNav.HorizontalScroll.Maximum = 0;
+            _contenedorNav.HorizontalScroll.Visible = false;
+            _contenedorNav.HorizontalScroll.Enabled = false;
+            _contenedorNav.MouseWheel += (_, e) => DesplazarNav(e);
             foreach (var item in _items.Where(i => !i.SoloAdmin || Sesion.EsAdmin))
             {
                 var b = new BotonRhino(item.Texto, EstiloBoton.Fantasma, item.Icono)
@@ -96,10 +101,13 @@ namespace POS_PizzeriaRhinos.Formularios
                 };
                 string clave = item.Clave;
                 b.Click += (_, _) => Navegar(clave);
+                // La rueda del ratón sobre un botón mueve el menú completo
+                b.MouseWheel += (_, e) => DesplazarNav(e);
                 _botonesNav[item.Clave] = b;
                 _contenedorNav.Controls.Add(b);
             }
             _contenedorNav.Layout += (_, _) => AcomodarNav();
+            _contenedorNav.ClientSizeChanged += (_, _) => AcomodarNav();
 
             // Tarjeta de usuario en la parte inferior
             var pnlUsuario = new Panel { Dock = DockStyle.Bottom, Height = UITheme.S(170), Padding = UITheme.P(14, 8, 14, 14) };
@@ -236,16 +244,48 @@ namespace POS_PizzeriaRhinos.Formularios
             AcomodarNav();
         }
 
+        private bool _acomodandoNav;
+
+        /// <summary>
+        /// Coloca los botones del menú uno debajo de otro. El ancho siempre es el visible (sin barra horizontal);
+        /// si no caben a lo alto, el panel muestra la barra vertical.
+        /// </summary>
         private void AcomodarNav()
         {
-            var area = _contenedorNav.DisplayRectangle;
-            int y = area.Y;
-            int gap = UITheme.S(6);
-            foreach (var b in _botonesNav.Values)
+            if (_acomodandoNav) return;
+            _acomodandoNav = true;
+            try
             {
-                b.SetBounds(area.X, y, area.Width, UITheme.S(56));
-                y += b.Height + gap;
+                int gap = UITheme.S(6);
+                int alto = UITheme.S(56);
+                var pad = _contenedorNav.Padding;
+                for (int intento = 0; intento < 3; intento++)
+                {
+                    int ancho = Math.Max(UITheme.S(40), _contenedorNav.ClientSize.Width - pad.Horizontal);
+                    int y = pad.Top + _contenedorNav.AutoScrollPosition.Y;
+                    foreach (var b in _botonesNav.Values)
+                    {
+                        b.SetBounds(pad.Left, y, ancho, alto);
+                        y += alto + gap;
+                    }
+                    int total = _botonesNav.Count * (alto + gap) - gap + pad.Vertical;
+                    _contenedorNav.AutoScrollMinSize = new Size(0, total);
+                    if (_contenedorNav.ClientSize.Width - pad.Horizontal == ancho) break;
+                }
             }
+            finally
+            {
+                _acomodandoNav = false;
+            }
+        }
+
+        private void DesplazarNav(MouseEventArgs e)
+        {
+            int actual = -_contenedorNav.AutoScrollPosition.Y;
+            int maximo = Math.Max(0, _contenedorNav.DisplayRectangle.Height - _contenedorNav.ClientSize.Height);
+            int nuevo = Math.Clamp(actual - e.Delta / 120 * UITheme.S(62), 0, maximo);
+            _contenedorNav.AutoScrollPosition = new Point(0, nuevo);
+            if (e is HandledMouseEventArgs h) h.Handled = true;
         }
 
         private void ActualizarReloj()

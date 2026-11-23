@@ -86,7 +86,8 @@ namespace POS_PizzeriaRhinos.Vistas
             _lblResumen = new Label { Height = UITheme.S(30), Font = UITheme.FuenteEtiqueta, ForeColor = UITheme.TextoSuave, TextAlign = ContentAlignment.MiddleLeft };
 
             // ---------------- Acciones (columna derecha, botones grandes) ----------------
-            var cardAcciones = new PanelRedondeado { Padding = UITheme.P(14) };
+            // AutoScroll: en pantallas bajas la columna se desplaza y ningún botón queda tapado
+            var cardAcciones = new PanelRedondeado { Padding = UITheme.P(14), AutoScroll = true };
             var lblAcciones = new Label { Text = "Acciones del pedido", Font = UITheme.Titulo(15f), ForeColor = UITheme.Texto, Height = UITheme.S(34) };
             _btnDetalle = new BotonRhino("Ver detalle", EstiloBoton.Secundario, "👁") { Height = UITheme.S(60) };
             _btnDetalle.Click += (_, _) => VerDetalle();
@@ -102,12 +103,16 @@ namespace POS_PizzeriaRhinos.Vistas
             _btnDespachar.Click += (_, _) => Despachar();
             _btnEntregado = new BotonRhino("Marcar entregado", EstiloBoton.Exito, "✔") { Height = UITheme.S(64) };
             _btnEntregado.Click += (_, _) => CambiarEstado("ENTREGADO");
-            _btnCancelar = new BotonRhino("Cancelar pedido", EstiloBoton.Peligro, "✖") { Height = UITheme.S(60), Dock = DockStyle.Bottom };
-            _btnCancelar.Click += (_, _) => CambiarEstado("CANCELADO");
+            _btnCancelar = new BotonRhino("Cancelar pedido", EstiloBoton.Peligro, "✖") { Height = UITheme.S(64) };
+            _btnCancelar.Click += (_, _) => CancelarPedido();
+            var lblCancelar = UITheme.CrearEtiqueta("SOLO PEDIDOS EN PREPARACIÓN O EN RUTA");
+            lblCancelar.AutoSize = false;
+            lblCancelar.Height = UITheme.S(24);
 
+            // El botón de cancelar va dentro del flujo (antes estaba acoplado abajo y otros botones lo tapaban)
             Diseno.Apilar(cardAcciones, null, lblAcciones, Diseno.Espacio(4), _btnDetalle, Diseno.Espacio(8), _btnReimprimir,
-                Diseno.Espacio(22), lblRep, _cmbRepartidor, Diseno.Espacio(8), _btnDespachar, Diseno.Espacio(8), _btnEntregado);
-            cardAcciones.Controls.Add(_btnCancelar);
+                Diseno.Espacio(18), lblRep, _cmbRepartidor, Diseno.Espacio(8), _btnDespachar, Diseno.Espacio(8), _btnEntregado,
+                Diseno.Espacio(18), lblCancelar, _btnCancelar, Diseno.Espacio(6));
 
             var colAcciones = new Panel { Dock = DockStyle.Right, Width = UITheme.S(290), Padding = UITheme.P(12, 0, 0, 0) };
             cardAcciones.Dock = DockStyle.Fill;
@@ -212,7 +217,9 @@ namespace POS_PizzeriaRhinos.Vistas
             _btnDespachar.Enabled = hay && srv == "DOMICILIO" && est == "EN_PREPARACION";
             _cmbRepartidor.Enabled = _btnDespachar.Enabled;
             _btnEntregado.Enabled = hay && ((srv == "DOMICILIO" && est == "EN_RUTA") || (srv == "MOSTRADOR" && est == "EN_PREPARACION"));
-            _btnCancelar.Enabled = hay && (est == "EN_PREPARACION" || est == "EN_RUTA");
+            // Habilitado con cualquier pedido seleccionado: si ya está entregado o cancelado, al tocarlo se explica por qué no procede
+            _btnCancelar.Enabled = hay;
+            _btnCancelar.Estilo = hay && (est == "EN_PREPARACION" || est == "EN_RUTA") ? EstiloBoton.Peligro : EstiloBoton.Secundario;
         }
 
         // ---------------------------------------------------------------
@@ -253,6 +260,45 @@ namespace POS_PizzeriaRhinos.Vistas
                 Dialogo.Exito(Shell, $"El pedido #{folio} salió a ruta con {_cmbRepartidor.Text}.", "Pedido despachado");
                 _cmbRepartidor.SelectedIndex = 0;
                 Recargar();
+            }
+        }
+
+        /// <summary>
+        /// Cancela el pedido seleccionado: valida selección y estado, pide confirmación y usa
+        /// PedidoDAO.ActualizarEstadoPedido(folio, "CANCELADO"), que en UNA transacción cambia el estado
+        /// y devuelve al inventario las bebidas del pedido. Después recarga la lista y los totales.
+        /// </summary>
+        private void CancelarPedido()
+        {
+            int? folio = FolioSeleccionado();
+            var d = DatosSeleccion();
+            if (folio == null || d == null)
+            {
+                Dialogo.Info(Shell, "Selecciona en la tabla el pedido que deseas cancelar.", "Ningún pedido seleccionado");
+                return;
+            }
+            switch (d.Value.estado)
+            {
+                case "CANCELADO":
+                    Dialogo.Advertencia(Shell, $"El pedido #{folio} ya está cancelado.", "No se puede cancelar");
+                    return;
+                case "ENTREGADO":
+                    Dialogo.Advertencia(Shell, $"El pedido #{folio} ya fue entregado y cobrado; no se puede cancelar.", "No se puede cancelar");
+                    return;
+            }
+            string extra = d.Value.estado == "EN_RUTA"
+                ? $"\n\nEl pedido ya va en camino con {d.Value.repartidor}; avísale al repartidor que regrese."
+                : "";
+            if (!Dialogo.Confirmar(Shell, $"Cancelar pedido #{folio}",
+                    $"¿Estás seguro de cancelar el pedido #{folio}? Esta acción no se puede deshacer.\n" +
+                    "Las bebidas del pedido regresarán al inventario." + extra,
+                    "Sí, cancelar pedido", "No, conservarlo", peligro: true))
+                return;
+
+            if (ErroresUi.Intentar(Shell, () => _pedidoDao.ActualizarEstadoPedido(folio.Value, "CANCELADO"), "No se pudo cancelar el pedido"))
+            {
+                Recargar(); // actualiza el contador de activos y el "Total sin cancelados"
+                Dialogo.Exito(Shell, $"El pedido #{folio} quedó CANCELADO.", "Pedido cancelado");
             }
         }
 

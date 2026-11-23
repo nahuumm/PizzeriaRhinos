@@ -75,6 +75,15 @@ namespace POS_PizzeriaRhinos.Formularios
             btnTicket.Click += (_, _) => ImpresorTickets.VistaPrevia(this, _cab, _detalle, ImpresorTickets.TipoDocumento.Ticket);
             var btnComanda = new BotonRhino("Comanda", EstiloBoton.Oscuro, "🖨") { Dock = DockStyle.Right, Width = UITheme.S(190) };
             btnComanda.Click += (_, _) => ImpresorTickets.VistaPrevia(this, _cab, _detalle, ImpresorTickets.TipoDocumento.Comanda);
+            // Cancelar pedido en la barra inferior (solo pedidos activos: en preparación o en ruta)
+            string estadoActual = cab.Estado.ToUpperInvariant();
+            if (estadoActual == "EN_PREPARACION" || estadoActual == "EN_RUTA")
+            {
+                var btnCancelar = new BotonRhino("Cancelar pedido", EstiloBoton.Peligro, "✖") { Dock = DockStyle.Left, Width = UITheme.S(220) };
+                btnCancelar.Click += (_, _) => CambiarEstado("CANCELADO");
+                barra.Controls.Add(btnCancelar);
+                barra.Controls.Add(new Panel { Dock = DockStyle.Left, Width = UITheme.S(10) });
+            }
             barra.Controls.Add(btnCerrar);
             barra.Controls.Add(btnTicket);
             barra.Controls.Add(new Panel { Dock = DockStyle.Right, Width = UITheme.S(10) });
@@ -165,13 +174,7 @@ namespace POS_PizzeriaRhinos.Formularios
                 btnEntregado.Click += (_, _) => CambiarEstado("ENTREGADO");
                 flow.Controls.Add(btnEntregado);
             }
-            if (estado == "EN_PREPARACION" || estado == "EN_RUTA")
-            {
-                var btnCancelar = new BotonRhino("Cancelar pedido", EstiloBoton.Peligro, "✖") { Size = UITheme.S(200, 64) };
-                btnCancelar.Click += (_, _) => CambiarEstado("CANCELADO");
-                flow.Controls.Add(btnCancelar);
-            }
-            else
+            if (estado != "EN_PREPARACION" && estado != "EN_RUTA")
             {
                 flow.Controls.Add(new Label
                 {
@@ -208,8 +211,8 @@ namespace POS_PizzeriaRhinos.Formularios
         {
             if (nuevo == "CANCELADO" &&
                 !Dialogo.Confirmar(this, $"Cancelar pedido #{_cab.Folio}",
-                    "El pedido quedará CANCELADO y no se podrá reactivar. Las bebidas regresarán al inventario.\n\n¿Confirmas la cancelación?",
-                    "Sí, cancelar pedido", "No", peligro: true))
+                    $"¿Estás seguro de cancelar el pedido #{_cab.Folio}? Esta acción no se puede deshacer.\nLas bebidas del pedido regresarán al inventario.",
+                    "Sí, cancelar pedido", "No, conservarlo", peligro: true))
                 return;
             if (nuevo == "ENTREGADO" &&
                 !Dialogo.Confirmar(this, $"Entregar pedido #{_cab.Folio}", "¿El pedido ya fue entregado al cliente?", "Sí, entregado", "No"))
