@@ -1,3 +1,6 @@
+-- Fuerza UTF-8 en la sesión para que acentos y ñ se guarden bien (aunque se ejecute desde consola)
+SET NAMES utf8mb4;
+
 -- =========================================================================
 -- PROYECTO FINAL: SISTEMA POS Y ADMINISTRACIÓN PARA PIZZERÍA (RHINOS)
 -- ARCHIVO: 01_esquema.sql

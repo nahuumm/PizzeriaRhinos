@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.ComponentModel;
 using System.Drawing;
 using System.Linq;
@@ -64,15 +64,14 @@ namespace POS_PizzeriaRhinos.Formularios
                 return tb;
             }
 
-            _txtTel = Campo("TELÉFONO * (10 dígitos, único)", 0, 0, 15, false);
+            _txtTel = Campo("TELÉFONO * (10 dígitos, único)", 0, 0, 10, false);
             _txtNombre = Campo("NOMBRE COMPLETO *", 1, 0, 100, true);
             _txtCalle = Campo("CALLE *", 0, 1, 100, true);
-            _txtNumero = Campo("NÚMERO DE CASA *", 1, 1, 20, false);
+            _txtNumero = Campo("NÚMERO DE CASA * (solo números)", 1, 1, 10, false);
             _txtColonia = Campo("COLONIA *", 0, 2, 80, true);
             _txtEntre = Campo("ENTRE CALLES", 1, 2, 120, true);
             _txtRef = Campo("REFERENCIAS VISUALES (color de casa, portón, vehículo…)", 0, 3, 250, false, span: 2);
 
-            _txtTel.KeyPress += (_, e) => { if (!char.IsControl(e.KeyChar) && !char.IsDigit(e.KeyChar)) e.Handled = true; };
 
             _lblError = new Label { AutoSize = false, Height = UITheme.S(30), ForeColor = UITheme.Rojo, Font = UITheme.Fuente(11f, FontStyle.Bold) };
 
@@ -112,6 +111,11 @@ namespace POS_PizzeriaRhinos.Formularios
                 _txtTel.Text = new string(telefonoInicial.Where(char.IsDigit).ToArray());
             }
 
+            // Solo números en teléfono y número de casa (teclado físico, Ctrl+V y teclado en pantalla).
+            // Se activa después de cargar los datos para no borrar en silencio un número viejo como "890-B".
+            Diseno.SoloNumeros(_txtTel);
+            Diseno.SoloNumeros(_txtNumero);
+
             Shown += (_, _) =>
             {
                 var primero = string.IsNullOrEmpty(_txtTel.Text) ? _txtTel : _txtNombre;
@@ -127,7 +131,13 @@ namespace POS_PizzeriaRhinos.Formularios
             if (!Regex.IsMatch(tel, @"^\d{10}$")) { campo = _txtTel; return "El teléfono debe tener exactamente 10 dígitos (solo números)."; }
             if (_txtNombre.Text.Trim().Length < 3) { campo = _txtNombre; return "Escribe el nombre del cliente (mínimo 3 letras)."; }
             if (_txtCalle.Text.Trim().Length == 0) { campo = _txtCalle; return "La calle es obligatoria."; }
-            if (_txtNumero.Text.Trim().Length == 0) { campo = _txtNumero; return "El número de casa es obligatorio."; }
+            string numero = _txtNumero.Text.Trim();
+            if (numero.Length == 0) { campo = _txtNumero; return "El número de casa es obligatorio."; }
+            if (!Regex.IsMatch(numero, @"^\d{1,10}$"))
+            {
+                campo = _txtNumero;
+                return "El número de casa solo admite números. Si la casa tiene letra o interior (ej. 890-B), escribe 890 y anota \"Interior B\" en Referencias.";
+            }
             if (_txtColonia.Text.Trim().Length == 0) { campo = _txtColonia; return "La colonia es obligatoria."; }
             return null;
         }

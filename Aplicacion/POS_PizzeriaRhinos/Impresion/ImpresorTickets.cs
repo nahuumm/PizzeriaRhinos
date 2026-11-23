@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Drawing;
@@ -72,6 +72,12 @@ namespace POS_PizzeriaRhinos.Impresion
             return cat == "PIZZA" || cat == "PIZZA_MOSTRADOR";
         }
 
+        private static string Tamano(DataRow r)
+        {
+            string cat = r.Table.Columns.Contains("Categoria") ? Convert.ToString(r["Categoria"]) ?? "" : "";
+            return UITheme.NombreTamano(cat, Convert.ToString(r["Tamaño"]));
+        }
+
         private static IEnumerable<string> Modificadores(DataRow r, bool conCosto)
         {
             string mods = Convert.ToString(r["Modificadores_Ingredientes"]) ?? "";
@@ -99,13 +105,13 @@ namespace POS_PizzeriaRhinos.Impresion
             foreach (DataRow r in det.Rows)
             {
                 l.AddRange(Envolver($"{r["Cantidad"]} x {r["Producto_Especialidad"]}", 10f, true));
-                l.AddRange(Envolver($"   Tamaño: {r["Tamaño"]}"));
+                l.AddRange(Envolver($"   Tamaño: {Tamano(r)}"));
                 if (EsPizza(r))
                 {
                     l.AddRange(Envolver($"   Masa: {r["Masa"]}"));
                     if (Convert.ToString(r["Orilla_Queso"]) == "Sí") l.AddRange(Envolver("   + ORILLA DE QUESO", 8.5f, true));
-                    if (Convert.ToString(r["Queso_Extra"]) == "Sí") l.AddRange(Envolver("   + QUESO EXTRA", 8.5f, true));
                 }
+                if (Convert.ToString(r["Queso_Extra"]) == "Sí") l.AddRange(Envolver("   + QUESO EXTRA", 8.5f, true));
                 foreach (var m in Modificadores(r, false)) l.AddRange(Envolver("   " + m, 8.5f, true));
                 string promo = Convert.ToString(r["Promo_2x1"]) ?? "No";
                 if (promo != "No") l.AddRange(Envolver($"   PROMO 2x1 {promo.Replace("Sí ", "")}"));
@@ -145,12 +151,9 @@ namespace POS_PizzeriaRhinos.Impresion
             {
                 decimal importe = Convert.ToDecimal(r["Subtotal_Linea"]);
                 l.AddRange(DosColumnas($"{r["Cantidad"]} {r["Producto_Especialidad"]}", Dinero(importe), true));
-                l.AddRange(Envolver($"   {r["Tamaño"]}" + (EsPizza(r) ? $" · Masa {Convert.ToString(r["Masa"])?.ToLowerInvariant()}" : "")));
-                if (EsPizza(r))
-                {
-                    if (Convert.ToString(r["Orilla_Queso"]) == "Sí") l.AddRange(Envolver("   Orilla de queso"));
-                    if (Convert.ToString(r["Queso_Extra"]) == "Sí") l.AddRange(Envolver("   Queso extra"));
-                }
+                l.AddRange(Envolver($"   {Tamano(r)}" + (EsPizza(r) ? $" · Masa {Convert.ToString(r["Masa"])?.ToLowerInvariant()}" : "")));
+                if (EsPizza(r) && Convert.ToString(r["Orilla_Queso"]) == "Sí") l.AddRange(Envolver("   Orilla de queso"));
+                if (Convert.ToString(r["Queso_Extra"]) == "Sí") l.AddRange(Envolver("   Queso extra"));
                 foreach (var m in Modificadores(r, true)) l.AddRange(Envolver("   " + m));
                 string promo = Convert.ToString(r["Promo_2x1"]) ?? "No";
                 if (promo != "No") l.AddRange(Envolver($"   Promo 2x1 {promo.Replace("Sí ", "")}"));
@@ -236,6 +239,8 @@ namespace POS_PizzeriaRhinos.Impresion
         private static void Dibujar(PrintPageEventArgs e, List<Linea> lineas)
         {
             var g = e.Graphics!;
+            // Se dibuja con GDI+ (texto Unicode), no con bytes ESC/POS, por lo que acentos, ñ, ¿ y ¡ salen tal cual
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
             float x = e.MarginBounds.Left;
             float ancho = e.MarginBounds.Width;
             float y = e.MarginBounds.Top;

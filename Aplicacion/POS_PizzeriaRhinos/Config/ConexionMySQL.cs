@@ -22,7 +22,11 @@ namespace POS_PizzeriaRhinos.Config
                     "Configura 'Administrar secretos de usuario' (secrets.json) en Visual Studio.");
             }
 
-            return cadena;
+            // Fuerza utf8mb4 en la conexión: así los acentos, la ñ y los signos ¿¡ viajan bien entre MySQL y la app
+            // aunque el servidor tenga otro juego de caracteres por defecto.
+            var builder = new MySqlConnectionStringBuilder(cadena);
+            if (string.IsNullOrWhiteSpace(builder.CharacterSet)) builder.CharacterSet = "utf8mb4";
+            return builder.ConnectionString;
         }
 
         public static MySqlConnection ObtenerConexion()

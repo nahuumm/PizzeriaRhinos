@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -68,14 +68,15 @@ namespace POS_PizzeriaRhinos.Vistas
             _txtBuscar.KeyDown += (_, e) => { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; Recargar(); } };
             var btnBuscar = new BotonRhino("Buscar", EstiloBoton.Ambar, "🔍") { Size = UITheme.S(120, 50) };
             btnBuscar.Click += (_, _) => Recargar();
-            var btnRefrescar = new BotonRhino("", EstiloBoton.Secundario, "⟳") { Size = UITheme.S(56, 50) };
-            btnRefrescar.Click += (_, _) => Recargar();
+            // Recarga desde MySQL conservando los filtros elegidos (estado, modalidad, periodo y búsqueda)
+            var btnActualizar = new BotonRhino("Actualizar", EstiloBoton.Azul, "⟳") { Size = UITheme.S(160, 50) };
+            btnActualizar.Click += (_, _) => Recargar();
 
             var filtros = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = true };
             filtros.Controls.AddRange(new Control[]
             {
                 _grpEstado, new Panel { Width = UITheme.S(16), Height = 1 }, _grpServicio, new Panel { Width = UITheme.S(16), Height = 1 },
-                _grpFecha, _txtBuscar, btnBuscar, btnRefrescar
+                _grpFecha, _txtBuscar, btnBuscar, btnActualizar
             });
 
             // ---------------- Tabla ----------------
@@ -167,7 +168,8 @@ namespace POS_PizzeriaRhinos.Vistas
                 if (est != "CANCELADO") total += Convert.ToDecimal(r["Total"]);
                 if (est == "EN_PREPARACION" || est == "EN_RUTA") activos++;
             }
-            _lblResumen.Text = $"{dt.Rows.Count} pedido(s) · {activos} activo(s) · Total sin cancelados: {UITheme.Dinero(total)}";
+            _lblResumen.Text = $"{dt.Rows.Count} pedido(s) · {activos} activo(s) · Total sin cancelados: {UITheme.Dinero(total)}" +
+                               $"   ·   Actualizado a las {DateTime.Now:HH:mm:ss}";
 
             if (folioSel.HasValue)
             {
@@ -220,7 +222,8 @@ namespace POS_PizzeriaRhinos.Vistas
         {
             int? folio = FolioSeleccionado();
             if (folio == null) return;
-            FrmDetallePedido.Mostrar(Shell, folio.Value);
+            // Si desde el detalle se despachó, entregó o canceló, la lista se recarga al cerrar
+            if (FrmDetallePedido.Mostrar(Shell, folio.Value)) Recargar();
         }
 
         private void Reimprimir()

@@ -61,7 +61,7 @@ Copia el contenido del ZIP encima de tu carpeta `PizzeriaRhinos` (reemplaza cuan
 ### Paso 5 — Recorrido de prueba rápido (5 minutos)
 1. Entra con `cajera1` / `caja123` → en el menú lateral **no** aparecen Inventario, Empleados ni Reportes.
 2. **Nuevo pedido** → *A domicilio* → teléfono `6461112233` → **Buscar** → aparece María Fernanda Castro.
-3. Toca **Hawaiana** → tamaño *Grande* → *Mitad y mitad* con *Mexicana* → agrega 3 ingredientes CON → revisa que el contador indique cuándo empieza a cobrar → *Fase final*: orilla de queso → **Agregar al ticket**.
+3. Toca **Armar pizza** → tamaño *Grande* → *Sabor*: *Mitad y mitad* Hawaiana / Mexicana → agrega 3 ingredientes CON y revisa que el contador indique cuándo empieza a cobrar → *Masa y orilla*: sartén + orilla de queso → **Agregar al ticket**. Luego **Armar calzone** → *Mediano* → quita un ingrediente → queso extra.
 4. **Bebidas** → Manzanita 600 ml (stock 2): agrégala 3 veces → la 3.ª vez debe avisar que no hay existencias.
 5. **Cobrar** → efectivo $1,000 → **Confirmar** → imprime la comanda y el ticket (vista previa).
 6. **Pedidos** → selecciona el folio → elige repartidor → **Despachar a ruta** → **Marcar entregado**.
@@ -105,7 +105,7 @@ Toma capturas de: login, inicio (cajera y admin), nuevo pedido con ticket, cada 
 | 1 | Cliente único por teléfono, historial, captura con teclado QWERTY | *Nuevo pedido* (Buscar / Nuevo / Historial), `FrmCliente` con `TecladoVirtual`, validación de 10 dígitos; MySQL rechaza duplicados (UNIQUE) |
 | 2 | Perfiles sin cocineros; cajera en sesión; repartidor a domicilio | Login solo CAJERO/ADMIN, menú por rol, el pedido guarda a la cajera de la sesión, despacho con `sp_asignar_repartidor_pedido` |
 | 3 | SIN / CON, primeros 5 sin costo, desde el 6.° con tarifa por tamaño | Paso *Ingredientes*: SIN sobre la receta, CON solo de ingredientes que no trae la receta (no existe "extra"), contador y costo con `fn_calcular_costo_extra_ingrediente` |
-| 4 | Fase final obligatoria | El asistente siempre termina en *Fase final* (masa gruesa/delgada/sartén, orilla, queso extra) con la tarifa del tamaño |
+| 4 | Fase final obligatoria | El asistente siempre termina en *Masa y orilla* (masa gruesa/delgada/sartén, orilla, queso extra) con la tarifa del tamaño: Tamaño → Sabor → Ingredientes → Masa y orilla. La masa de **sartén solo se habilita en Grande y Extragrande**. En el calzone el último paso es solo *Queso extra* |
 | 5 | 2x1 solo en Mediana/Grande/Extragrande, cada pizza configurable y con mitades | Categoría *Promo 2x1*: configura la pizza 1 y la 2 por separado (mismo tamaño); se cobra la de mayor precio y los extras de ambas |
 | 6 | Pizza de mostrador solo en MOSTRADOR | La categoría *Mostrador* solo aparece en mostrador; al cambiar a domicilio se piden quitar esas pizzas |
 | 7 | Stock automático de bebidas, botón deshabilitado en 0 | Tarjetas con "Quedan N" / **AGOTADO** deshabilitado; no deja pedir más que el stock; el trigger descuenta |
@@ -149,9 +149,23 @@ Toma capturas de: login, inicio (cajera y admin), nuevo pedido con ticket, cada 
 | PF-17 | Ingrediente NO HAY (R8, trigger) | — | Marcar Piña NO HAY | Configurar pizza | Piña aparece "Agotado" y no se puede agregar | | |
 | PF-18 | Corte de caja (24) | Pedidos del día | Rango "Hoy" | Reportes → Corte | Totales y lista de pedidos; doble clic abre el detalle | | |
 | PF-19 | Persistencia (26) | Pedido creado | — | Cerrar la app, abrir, ir a Pedidos | El pedido sigue ahí con su estado | | |
+| PF-21 | Sartén solo Grande/Extragrande | — | Tamaño Mediana | Armar pizza → Masa y orilla | Botón Sartén deshabilitado ("Solo Grande y Extragrande"); en Grande se habilita | | |
+| PF-22 | Número de casa solo dígitos (25) | — | Escribir o pegar "12-B" | Clientes → Añadir | Solo queda "12"; al guardar con letras se pide anotarlas en Referencias | | |
+| PF-23 | Actualizar desde el detalle | Pedido activo | — | Pedidos → Ver detalle → Marcar entregado | El diálogo se cierra y la lista se refresca sola con el nuevo estado | | |
+| PF-24 | Nuevo producto (CRUD) | — | Pizza "Rhino BBQ", receta 4 ingredientes, precios Mediana/Grande | Inventario → Productos → Nuevo producto | Aparece en la lista y en Armar pizza → Sabor | | |
+| PF-25 | Renombrar producto | Producto existente | Nombre nuevo | Inventario → Productos → Renombrar | El nombre cambia en el POS, la comanda y los reportes; un nombre repetido se rechaza | | |
+| PF-26 | Calzone configurable | Script 05 ejecutado | Calzone Mediano, SIN 1, CON 1, queso extra | Nuevo pedido → Armar calzone | Tamaños Chico a Extra grande; sin mitades, masa ni orilla; ticket con "Mediano" y "Queso extra" | | |
 | PF-20 | Responsivo | — | Ventana a 1024 × 700 y maximizada | Redimensionar | Barra lateral compacta, botones visibles, sin controles cortados | | |
 
 ---
+
+> **Orden del configurador:** está en el constructor de `FrmConfigurarPizza` (lista `_pasos`).
+
+### Calzone
+Se arma igual que una pizza con el botón **Armar calzone**: tamaño (**Chico, Mediano, Grande, Extra grande**), sabor si hay más de un calzone, ingredientes SIN/CON con el mismo límite de incluidos y, al final, **solo queso extra**. No tiene mitad y mitad, no cambia de masa y no lleva orilla. Los tamaños reutilizan los registros Chica/Mediana/Grande/Extragrande de `TAMANO_PRESENTACION` (así funcionan las tarifas de ingrediente extra y de queso extra) y la app los muestra en masculino.
+
+### Productos (administrador)
+*Inventario → Productos y precios*: **Nuevo producto** (nombre, categoría, receta base, máximo de ingredientes incluidos y precio por tamaño; en bebidas también el stock inicial), **Editar producto** (nombre, receta y tamaños), **Renombrar**, **Cambiar precio** y **Activar / desactivar**. Todo se guarda en una transacción (`PRODUCTO` + `PRODUCTO_PRECIO` + `RECETA_PRODUCTO`). Un tamaño con ventas no se borra (para no romper el historial); se avisa.
 
 ## 6. Pendientes detectados para el equipo (fuera de frontend)
 
@@ -159,3 +173,7 @@ Toma capturas de: login, inicio (cajera y admin), nuevo pedido con ticket, cada 
 2. **Contraseñas en texto plano.** El *Análisis* dice "contraseña cifrada", pero `02_datos.sql` y `EmpleadoDAO.Autenticar` comparan texto plano. Sugerencia: guardar `SHA2('admin123', 256)` en los datos y comparar `contrasena = SHA2(@pwd, 256)` en `Autenticar` y `Guardar`.
 3. **Pagos:** el boceto tiene "PAGOS", pero el esquema no tiene una tabla de pagos. La interfaz calcula el cambio y lo imprime en el ticket, pero el método de pago **no se guarda**. Si el equipo lo quiere persistir, DBA tendría que agregar una columna `metodo_pago` en PEDIDO.
 4. **Carpetas de entrega:** faltan `Diagramas/`, `Pruebas/` (matriz con resultados) y `Video/` según la estructura sugerida del Proyecto Final.
+5. **Datos de prueba vs. reglas nuevas:** `02_datos.sql` trae la tarifa `MASA_SARTEN` para los 8 tamaños (solo debería existir para Grande y Extragrande) y el cliente Diana Morales con número de casa `890-B` (ahora solo se aceptan dígitos). DBA puede dejar `MASA_SARTEN` solo para `id_tamano` 4 y 5, y cambiar `890-B` por `890` con "Interior B" en referencias. Backend puede rechazar también la sartén en otros tamaños dentro de `ValidarPedidoNegocio`.
+6. **Acentos:** los scripts SQL ahora empiezan con `SET NAMES utf8mb4;`. Si la base se cargó antes con acentos dañados (`SELECT nombre FROM INGREDIENTE WHERE nombre LIKE '%Ã%';` devuelve filas), hay que volver a ejecutar los scripts 01 → 04.
+7. **Calzone:** ejecutar `Sql/05_ajuste_calzone.sql` sobre la base actual (agrega los 4 tamaños del calzone y quita "Orden" si no tiene ventas). Los precios del calzone (95 / 115 / 145 / 175) son **de ejemplo**: el dueño debe confirmarlos y el admin ajustarlos en Inventario. `02_datos.sql` ya trae los nuevos precios para reconstrucciones desde cero.
+

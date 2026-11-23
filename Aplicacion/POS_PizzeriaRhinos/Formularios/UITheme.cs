@@ -337,6 +337,24 @@ namespace POS_PizzeriaRhinos.Formularios
             }
         }
 
+        /// <summary>
+        /// Nombre del tamaño tal como se muestra en pantalla y tickets. Los calzones usan los mismos tamaños
+        /// de la tabla TAMANO_PRESENTACION que las pizzas (Chica, Mediana, Grande, Extragrande), pero se nombran
+        /// en masculino: Chico, Mediano, Grande y Extra grande.
+        /// </summary>
+        public static string NombreTamano(string? categoria, string? tamano)
+        {
+            string t = tamano ?? "";
+            if (!string.Equals(categoria, "CALZONE", StringComparison.OrdinalIgnoreCase)) return t;
+            return t.Trim().ToUpperInvariant() switch
+            {
+                "CHICA" => "Chico",
+                "MEDIANA" => "Mediano",
+                "EXTRAGRANDE" => "Extra grande",
+                _ => t
+            };
+        }
+
         /// <summary>Cultura es-MX para mostrar precios como $1,234.50</summary>
         public static readonly System.Globalization.CultureInfo Cultura = new System.Globalization.CultureInfo("es-MX");
         public static string Dinero(decimal valor) => valor.ToString("C2", Cultura);

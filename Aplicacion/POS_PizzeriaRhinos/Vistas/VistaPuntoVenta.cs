@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -31,7 +31,7 @@ namespace POS_PizzeriaRhinos.Vistas
         private Cliente? _cliente;
         private readonly List<ItemCarrito> _carrito = new();
         private int _grupoPromo = 1;
-        private string _categoria = "PIZZA";
+        private string _categoria = "BEBIDA";
 
         private DataTable _menu = new();
         private DataTable _bebidas = new();
@@ -44,6 +44,7 @@ namespace POS_PizzeriaRhinos.Vistas
         private readonly BotonRhino _btnHistorial, _btnQuitarCliente;
         private readonly Label _lblCliente;
         private readonly GrupoOpciones _grpCategorias;
+        private readonly BotonRhino _btnPizza, _btnPromo, _btnMostrador, _btnCalzone;
         private readonly Label _lblAyuda;
         private readonly FlowLayoutPanel _flowProductos;
         private readonly DataGridView _dgvTicket;
@@ -73,11 +74,11 @@ namespace POS_PizzeriaRhinos.Vistas
             lblTel.AutoSize = false;
             lblTel.Height = UITheme.S(24);
 
-            _txtTelefono = new TextBox { Width = UITheme.S(210), MaxLength = 15, Margin = UITheme.P(4, 10, 6, 4) };
+            _txtTelefono = new TextBox { Width = UITheme.S(210), MaxLength = 10, Margin = UITheme.P(4, 10, 6, 4) };
             UITheme.EstilizarTextBox(_txtTelefono);
             _txtTelefono.Font = UITheme.Fuente(16f);
             _txtTelefono.KeyDown += (_, e) => { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; BuscarCliente(); } };
-            _txtTelefono.KeyPress += (_, e) => { if (!char.IsControl(e.KeyChar) && !char.IsDigit(e.KeyChar)) e.Handled = true; };
+            Diseno.SoloNumeros(_txtTelefono);
 
             var btnBuscar = new BotonRhino("Buscar", EstiloBoton.Ambar, "🔍") { Size = UITheme.S(124, 52) };
             btnBuscar.Click += (_, _) => BuscarCliente();
@@ -97,8 +98,23 @@ namespace POS_PizzeriaRhinos.Vistas
                 cardCliente.Height = cardCliente.Padding.Vertical + filaServicio.Height + lblTel.Height + filaTel.Height + _lblCliente.Height + UITheme.S(4);
 
             // ---- Categorías ----
-            _grpCategorias = new GrupoOpciones { TamanoBoton = UITheme.S(146, 52), Dock = DockStyle.Top };
-            _grpCategorias.ValorCambiado += (_, _) => { _categoria = _grpCategorias.Valor as string ?? "PIZZA"; ConstruirTarjetas(); };
+            // Pizzas: botones de acción que abren directo el configurador (tamaño → masa → sabor → ingredientes).
+            // Ya no se muestra la cuadrícula de especialidades: el sabor se elige dentro del configurador.
+            _btnPizza = new BotonRhino("Armar pizza", EstiloBoton.Primario, "🍕") { Size = UITheme.S(170, 56) };
+            _btnPizza.Click += (_, _) => ConfigurarPizza(ModoPizza.Normal);
+            _btnPromo = new BotonRhino("Promo 2x1", EstiloBoton.Primario, "⭐") { Size = UITheme.S(150, 56) };
+            _btnPromo.Click += (_, _) => ArmarPromo2x1();
+            _btnMostrador = new BotonRhino("Pizza mostrador", EstiloBoton.Peligro, "🏪") { Size = UITheme.S(180, 56), Visible = false };
+            _btnMostrador.Click += (_, _) => ConfigurarPizza(ModoPizza.Mostrador);
+            // Calzone: se arma como una pizza (tamaño, ingredientes SIN/CON y queso extra), sin mitades ni orilla
+            _btnCalzone = new BotonRhino("Armar calzone", EstiloBoton.Ambar, "🥟") { Size = UITheme.S(180, 56) };
+            _btnCalzone.Click += (_, _) => ConfigurarPizza(ModoPizza.Calzone);
+
+            // Resto del menú: categorías que se muestran como tarjetas
+            _grpCategorias = new GrupoOpciones { TamanoBoton = UITheme.S(146, 52) };
+            _grpCategorias.ValorCambiado += (_, _) => { _categoria = _grpCategorias.Valor as string ?? "BEBIDA"; ConstruirTarjetas(); };
+            var barraMenu = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = true };
+            barraMenu.Controls.AddRange(new Control[] { _btnPizza, _btnPromo, _btnMostrador, _btnCalzone, new Panel { Width = UITheme.S(14), Height = 1 }, _grpCategorias });
             _lblAyuda = new Label { AutoSize = false, Height = UITheme.S(30), Font = UITheme.Fuente(10.5f), ForeColor = UITheme.TextoSuave, TextAlign = ContentAlignment.MiddleLeft };
 
             // ---- Productos ----
@@ -107,7 +123,7 @@ namespace POS_PizzeriaRhinos.Vistas
             cardProductos.Controls.Add(_flowProductos);
 
             var colIzq = new Panel { Dock = DockStyle.Fill, Padding = UITheme.P(0, 0, 10, 0) };
-            Diseno.Apilar(colIzq, cardProductos, cardCliente, Diseno.Espacio(10), _grpCategorias, _lblAyuda);
+            Diseno.Apilar(colIzq, cardProductos, cardCliente, Diseno.Espacio(10), barraMenu, _lblAyuda);
 
             // =============================== COLUMNA DERECHA (TICKET) ===============================
             var cardTicket = new PanelRedondeado { Dock = DockStyle.Fill, Padding = UITheme.P(16) };
@@ -248,15 +264,13 @@ namespace POS_PizzeriaRhinos.Vistas
         {
             _grpCategorias.SuspendLayout();
             _grpCategorias.Limpiar();
-            _grpCategorias.Agregar("Pizzas", "PIZZA", "🍕");
-            _grpCategorias.Agregar("Promo 2x1", "PROMO", "⭐");
-            if (_tipoServicio == "MOSTRADOR" && FilasMenu("PIZZA_MOSTRADOR").Count > 0)
-                _grpCategorias.Agregar("Mostrador", "PIZZA_MOSTRADOR", "🏪");
-            _grpCategorias.Agregar("Calzone", "CALZONE", "🥟");
             _grpCategorias.Agregar("Complementos", "COMPLEMENTO", "🍗");
             _grpCategorias.Agregar("Bebidas", "BEBIDA", "🥤");
-            if (!_grpCategorias.Botones.Any(b => Equals(b.Valor, _categoria))) _categoria = "PIZZA";
+            if (!_grpCategorias.Botones.Any(b => Equals(b.Valor, _categoria))) _categoria = "BEBIDA";
             _grpCategorias.Seleccionar(_categoria);
+            // La pizza de mostrador solo existe en venta de mostrador (Regla 6)
+            _btnMostrador.Visible = _tipoServicio == "MOSTRADOR" && FilasMenu("PIZZA_MOSTRADOR").Count > 0;
+            _btnCalzone.Enabled = FilasMenu("CALZONE").Count > 0;
             _grpCategorias.ResumeLayout(true);
         }
 
@@ -267,53 +281,6 @@ namespace POS_PizzeriaRhinos.Vistas
 
             switch (_categoria)
             {
-                case "PIZZA":
-                case "PROMO":
-                    {
-                        bool promo = _categoria == "PROMO";
-                        _lblAyuda.Text = promo
-                            ? "⭐ 2x1 en Mediana, Grande y Extragrande: elige la 1.ª pizza; después configuras la 2.ª (se cobra la de mayor precio)."
-                            : "Toca una especialidad para elegir tamaño, mitades, ingredientes y fase final.";
-                        var filas = FilasMenu("PIZZA").Where(r => string.Equals(Convert.ToString(r["variante"]), "NORMAL", StringComparison.OrdinalIgnoreCase));
-                        if (promo) filas = filas.Where(r => Convert.ToBoolean(r["aplica_promocion_2x1"]));
-                        foreach (var g in filas.GroupBy(r => Convert.ToInt32(r["id_producto"])).OrderBy(g => Convert.ToString(g.First()["producto"])))
-                        {
-                            int id = g.Key;
-                            _recetasTexto.TryGetValue(id, out string? receta);
-                            var t = new TarjetaProducto
-                            {
-                                Titulo = Convert.ToString(g.First()["producto"]) ?? "",
-                                Descripcion = string.IsNullOrEmpty(receta) ? "Receta de la casa" : receta,
-                                Precio = "Desde " + UITheme.Dinero(g.Min(r => Convert.ToDecimal(r["precio"]))),
-                                Insignia = promo ? "2x1" : null,
-                                ColorInsignia = UITheme.Rojo,
-                                Valor = id
-                            };
-                            t.Click += (_, _) => { if (promo) ArmarPromo2x1(id); else ConfigurarPizza(id, ModoPizza.Normal); };
-                            _flowProductos.Controls.Add(t);
-                        }
-                        break;
-                    }
-                case "PIZZA_MOSTRADOR":
-                    {
-                        _lblAyuda.Text = "🏪 Tarifa especial solo para venta en mostrador (Grande y Extragrande, un ingrediente).";
-                        foreach (var g in FilasMenu("PIZZA_MOSTRADOR").GroupBy(r => Convert.ToInt32(r["id_producto"])))
-                        {
-                            int id = g.Key;
-                            var t = new TarjetaProducto
-                            {
-                                Titulo = Convert.ToString(g.First()["producto"]) ?? "",
-                                Descripcion = string.Join(" · ", g.Select(r => Convert.ToString(r["tamano_presentacion"]))),
-                                Precio = "Desde " + UITheme.Dinero(g.Min(r => Convert.ToDecimal(r["precio"]))),
-                                Insignia = "Mostrador",
-                                ColorInsignia = UITheme.RojoOscuro,
-                                Valor = id
-                            };
-                            t.Click += (_, _) => ConfigurarPizza(id, ModoPizza.Mostrador);
-                            _flowProductos.Controls.Add(t);
-                        }
-                        break;
-                    }
                 case "BEBIDA":
                     {
                         _lblAyuda.Text = "🥤 El stock se descuenta automáticamente al cobrar. Las bebidas agotadas aparecen deshabilitadas.";
@@ -340,7 +307,7 @@ namespace POS_PizzeriaRhinos.Vistas
                 default:
                     {
                         string cat = _categoria;
-                        _lblAyuda.Text = cat == "CALZONE" ? "🥟 Calzone por orden." : "🍗 Alitas, boneless, papas y pan de ajo.";
+                        _lblAyuda.Text = "🍗 Alitas, boneless, papas y pan de ajo.";
                         foreach (var r in FilasMenu(cat).OrderBy(x => Convert.ToString(x["producto"])).ThenBy(x => Convert.ToInt32(x["id_tamano"])))
                         {
                             int idProd = Convert.ToInt32(r["id_producto"]);
@@ -392,10 +359,15 @@ namespace POS_PizzeriaRhinos.Vistas
         // =====================================================================
         // AGREGAR PRODUCTOS
         // =====================================================================
-        private void ConfigurarPizza(int idProducto, ModoPizza modo)
+        private void ConfigurarPizza(ModoPizza modo)
         {
-            string titulo = modo == ModoPizza.Mostrador ? "🏪 Pizza de mostrador" : "🍕 Configurar pizza";
-            using var frm = new FrmConfigurarPizza(_menu, _ingredientes, _recetasTexto, modo, idProducto, null, titulo);
+            string titulo = modo switch
+            {
+                ModoPizza.Mostrador => "🏪 Pizza de mostrador",
+                ModoPizza.Calzone => "🥟 Armar calzone",
+                _ => "🍕 Armar pizza"
+            };
+            using var frm = new FrmConfigurarPizza(_menu, _ingredientes, _recetasTexto, modo, null, null, titulo);
             if (frm.ShowDialog(Shell) == DialogResult.OK && frm.Resultado != null)
             {
                 _carrito.Add(frm.Resultado);
@@ -403,9 +375,9 @@ namespace POS_PizzeriaRhinos.Vistas
             }
         }
 
-        private void ArmarPromo2x1(int idProducto)
+        private void ArmarPromo2x1()
         {
-            using var f1 = new FrmConfigurarPizza(_menu, _ingredientes, _recetasTexto, ModoPizza.Promo2x1, idProducto, null, "⭐ Promo 2x1 — Pizza 1 de 2");
+            using var f1 = new FrmConfigurarPizza(_menu, _ingredientes, _recetasTexto, ModoPizza.Promo2x1, null, null, "⭐ Promo 2x1 — Pizza 1 de 2");
             if (f1.ShowDialog(Shell) != DialogResult.OK || f1.Resultado == null) return;
             var p1 = f1.Resultado;
 
@@ -487,19 +459,19 @@ namespace POS_PizzeriaRhinos.Vistas
             var sb = new StringBuilder();
             string nombre = c.IdProductoMitad2 != null ? $"{c.NombreProducto} / {c.NombreMitad2}" : c.NombreProducto;
             sb.Append($"{nombre} · {c.TamanoNombre}");
+            foreach (var m in c.Modificadores)
+            {
+                string mitad = m.MitadAplicada == "MITAD_1" ? " (mitad 1)" : m.MitadAplicada == "MITAD_2" ? " (mitad 2)" : "";
+                string costo = m.CostoAplicado > 0 ? $" +{UITheme.Dinero(m.CostoAplicado)}" : "";
+                sb.Append($"\n   {m.TipoAccion} {m.NombreIngrediente}{mitad}{costo}");
+            }
             if (EsPizza(c))
             {
-                foreach (var m in c.Modificadores)
-                {
-                    string mitad = m.MitadAplicada == "MITAD_1" ? " (mitad 1)" : m.MitadAplicada == "MITAD_2" ? " (mitad 2)" : "";
-                    string costo = m.CostoAplicado > 0 ? $" +{UITheme.Dinero(m.CostoAplicado)}" : "";
-                    sb.Append($"\n   {m.TipoAccion} {m.NombreIngrediente}{mitad}{costo}");
-                }
                 if (c.TipoMasa == "DELGADA") sb.Append("\n   Masa delgada");
                 if (c.TipoMasa == "SARTEN") sb.Append("\n   Masa de sartén");
                 if (c.ConOrillaQueso) sb.Append("\n   Orilla de queso");
-                if (c.ConQuesoExtra) sb.Append("\n   Queso extra");
             }
+            if (c.ConQuesoExtra) sb.Append("\n   Queso extra");
             if (c.EsPromocion2x1)
                 sb.Append($"\n   ⭐ Promo 2x1 #{c.GrupoPromo}" + (c.PrecioBase == 0 ? " (pizza sin costo)" : ""));
             return sb.ToString();

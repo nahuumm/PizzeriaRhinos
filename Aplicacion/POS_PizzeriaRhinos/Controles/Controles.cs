@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
@@ -616,6 +616,28 @@ namespace POS_PizzeriaRhinos.Controles
             var hijos = padre.Controls.Cast<Control>().ToList();
             padre.Controls.Clear();
             foreach (var c in hijos) c.Dispose();
+        }
+
+        /// <summary>
+        /// Permite solo dígitos en un cuadro de texto: bloquea las teclas que no son números (KeyPress)
+        /// y limpia lo que llegue pegado con Ctrl+V o desde el teclado en pantalla (TextChanged).
+        /// Llamar DESPUÉS de cargar el valor inicial para no modificar datos existentes sin avisar.
+        /// </summary>
+        public static void SoloNumeros(TextBox tb)
+        {
+            tb.KeyPress += (_, e) =>
+            {
+                if (!char.IsControl(e.KeyChar) && !char.IsDigit(e.KeyChar)) e.Handled = true;
+            };
+            tb.TextChanged += (_, _) =>
+            {
+                string limpio = new string(tb.Text.Where(char.IsDigit).ToArray());
+                if (limpio == tb.Text) return;
+                int quitados = tb.Text.Length - limpio.Length;
+                int pos = Math.Max(0, tb.SelectionStart - quitados);
+                tb.Text = limpio; // vuelve a disparar TextChanged, pero ya no hay nada que limpiar
+                tb.SelectionStart = Math.Min(pos, limpio.Length);
+            };
         }
 
         /// <summary>Separador vertical transparente.</summary>
