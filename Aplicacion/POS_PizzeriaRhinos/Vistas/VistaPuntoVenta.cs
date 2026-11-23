@@ -47,7 +47,7 @@ namespace POS_PizzeriaRhinos.Vistas
         private readonly BotonRhino _btnPizza, _btnPromo, _btnMostrador, _btnCalzone;
         private readonly Label _lblAyuda;
         private readonly FlowLayoutPanel _flowProductos;
-        private readonly DataGridView _dgvTicket;
+        private readonly ListaTicket _listaTicket;
         private readonly Label _lblPartidas, _lblSubtotal, _lblExtras, _lblTotal;
         private readonly Panel _pnlRepartidor;
         private readonly Panel _abajoTicket;
@@ -133,22 +133,11 @@ namespace POS_PizzeriaRhinos.Vistas
             filaTitulo.Controls.Add(lblTitTicket);
             filaTitulo.Controls.Add(_lblPartidas);
 
-            _dgvTicket = new DataGridView();
-            UITheme.EstilizarGrid(_dgvTicket);
-            _dgvTicket.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
-            _dgvTicket.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
-            _dgvTicket.DefaultCellStyle.Padding = new Padding(UITheme.S(6), UITheme.S(8), UITheme.S(6), UITheme.S(8));
-            _dgvTicket.ColumnHeadersDefaultCellStyle.Padding = new Padding(UITheme.S(6), 0, UITheme.S(6), 0);
-            var colCant = new DataGridViewTextBoxColumn { Name = "cant", HeaderText = "Cant.", AutoSizeMode = DataGridViewAutoSizeColumnMode.None, Width = UITheme.S(66) };
-            colCant.DefaultCellStyle.Alignment = DataGridViewContentAlignment.TopCenter;
-            colCant.DefaultCellStyle.Font = UITheme.Fuente(12f, FontStyle.Bold);
-            var colDesc = new DataGridViewTextBoxColumn { Name = "desc", HeaderText = "Producto", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill };
-            var colImp = new DataGridViewTextBoxColumn { Name = "imp", HeaderText = "Importe", AutoSizeMode = DataGridViewAutoSizeColumnMode.None, Width = UITheme.S(110) };
-            colImp.DefaultCellStyle.Alignment = DataGridViewContentAlignment.TopRight;
-            colImp.DefaultCellStyle.Font = UITheme.Fuente(11f, FontStyle.Bold);
-            _dgvTicket.Columns.AddRange(colCant, colDesc, colImp);
-            foreach (DataGridViewColumn c in _dgvTicket.Columns) c.SortMode = DataGridViewColumnSortMode.NotSortable;
-            _dgvTicket.SelectionChanged += (_, _) => ActualizarBotonesTicket();
+            // Lista con desplazamiento por píxel: una pizza con muchos ingredientes se ve completa con la rueda,
+            // la barra o arrastrando con el dedo (el DataGridView no podía mostrar filas más altas que el área visible)
+            _listaTicket = new ListaTicket();
+            var encabezadoTicket = new EncabezadoTicket();
+            _listaTicket.SeleccionCambiada += (_, _) => ActualizarBotonesTicket();
 
             _btnMenos = new BotonRhino("", EstiloBoton.Secundario, "➖") { Dock = DockStyle.Fill, Margin = UITheme.P(0, 6, 6, 0) };
             _btnMenos.Click += (_, _) => CambiarCantidad(-1);
@@ -203,7 +192,7 @@ namespace POS_PizzeriaRhinos.Vistas
             _abajoTicket = new Panel { Dock = DockStyle.Bottom, Height = UITheme.S(64 + 118 + 12) };
             Diseno.Apilar(_abajoTicket, null, filaAcciones, _pnlRepartidor, pnlTotales);
 
-            Diseno.Apilar(cardTicket, _dgvTicket, filaTitulo, Diseno.Espacio(6));
+            Diseno.Apilar(cardTicket, _listaTicket, filaTitulo, Diseno.Espacio(6), encabezadoTicket);
             cardTicket.Controls.Add(_abajoTicket);
             cardTicket.Controls.Add(_btnCobrar);
 
@@ -479,18 +468,7 @@ namespace POS_PizzeriaRhinos.Vistas
 
         private void RefrescarTicket(int? seleccionar = null)
         {
-            _dgvTicket.Rows.Clear();
-            foreach (var c in _carrito)
-                _dgvTicket.Rows.Add(c.Cantidad.ToString(), Describir(c), UITheme.Dinero(c.SubtotalLinea));
-
-            if (_dgvTicket.Rows.Count > 0)
-            {
-                int i = Math.Clamp(seleccionar ?? _dgvTicket.Rows.Count - 1, 0, _dgvTicket.Rows.Count - 1);
-                _dgvTicket.ClearSelection();
-                _dgvTicket.CurrentCell = _dgvTicket.Rows[i].Cells[1];
-                _dgvTicket.Rows[i].Selected = true;
-                try { _dgvTicket.FirstDisplayedScrollingRowIndex = i; } catch (InvalidOperationException) { /* la tabla aún no tiene tamaño */ }
-            }
+            _listaTicket.Cargar(_carrito.Select(c => (c.Cantidad.ToString(), Describir(c), UITheme.Dinero(c.SubtotalLinea))).ToList(), seleccionar);
 
             decimal sub = _carrito.Sum(c => c.PrecioBase * c.Cantidad);
             decimal ext = _carrito.Sum(c => c.CostoExtras * c.Cantidad);
@@ -507,9 +485,8 @@ namespace POS_PizzeriaRhinos.Vistas
 
         private ItemCarrito? LineaSeleccionada()
         {
-            var row = _dgvTicket.CurrentRow;
-            if (row == null || row.Index < 0 || row.Index >= _carrito.Count) return null;
-            return _carrito[row.Index];
+            int i = _listaTicket.IndiceSeleccionado;
+            return i < 0 || i >= _carrito.Count ? null : _carrito[i];
         }
 
         private void ActualizarBotonesTicket()
