@@ -48,6 +48,7 @@ Ejecutar en MySQL Workbench, **en este orden**:
 2. `Sql/02_datos.sql` — datos de prueba (empleados, clientes, menú, precios, tarifas).
 3. `Sql/03_consultas_vistas.sql` — vistas `vw_menu_pos_activo`, `vw_resumen_pedidos_corte` y las 10 consultas documentadas.
 4. `Sql/04_rutinas_pruebas.sql` — 2 triggers, la función `fn_calcular_costo_extra_ingrediente` y los procedimientos `sp_crear_pedido_cabecera` y `sp_asignar_repartidor_pedido`.
+5. `Sql/05_ajuste_calzone.sql` — solo si la base se cargó antes de esta versión: agrega los tamaños Chico/Mediano/Grande/Extra grande del calzone.
 
 ## 4. Configuración de la conexión
 
@@ -81,10 +82,10 @@ Los repartidores no inician sesión (no tienen usuario); se asignan a los pedido
 | Módulo | Qué hace | Tablas / objetos de BD |
 | --- | --- | --- |
 | **Inicio** | Indicadores del día y avisos (bebidas con stock bajo, ingredientes agotados) | PEDIDO, PRODUCTO_PRECIO, INGREDIENTE |
-| **Nuevo pedido** | Modalidad, cliente por teléfono, menú en tarjetas, configurador de pizza, ticket, cobro e impresión | `vw_menu_pos_activo`, `fn_calcular_costo_extra_ingrediente`, transacción multitabla, `trg_validar_y_descontar_stock`, `trg_validar_modificador_ingrediente` |
+| **Nuevo pedido** | Modalidad, cliente por teléfono, Armar pizza / Promo 2x1 / Pizza mostrador / Armar calzone, menú en tarjetas (complementos y bebidas), ticket, cobro e impresión | `vw_menu_pos_activo`, `fn_calcular_costo_extra_ingrediente`, transacción multitabla, `trg_validar_y_descontar_stock`, `trg_validar_modificador_ingrediente` |
 | **Pedidos** | Seguimiento, despacho a ruta, entregado, cancelación (regresa stock), detalle y reimpresión | `vw_resumen_pedidos_corte`, `sp_asignar_repartidor_pedido` |
 | **Clientes** | CRUD completo, búsqueda e historial de pedidos | CLIENTE, PEDIDO |
-| **Inventario** (admin) | CRUD de ingredientes y HAY / NO HAY, stock de bebidas, precios y productos activos | INGREDIENTE, PRECIO_INGREDIENTE_EXTRA, PRODUCTO, PRODUCTO_PRECIO |
+| **Inventario** (admin) | CRUD de ingredientes y HAY / NO HAY, stock de bebidas, alta y edición de productos (nombre, receta, precios por tamaño), activar/desactivar | INGREDIENTE, PRECIO_INGREDIENTE_EXTRA, PRODUCTO, PRODUCTO_PRECIO, RECETA_PRODUCTO |
 | **Empleados** (admin) | CRUD de cajeras, repartidores y administradores | EMPLEADO |
 | **Reportes** (admin) | Corte de caja, liquidación de repartidores, ventas por cajera y modalidad, lo más vendido, exportar CSV | Consultas con JOIN, GROUP BY y agregados |
 

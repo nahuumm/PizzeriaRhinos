@@ -1,3 +1,6 @@
+-- Fuerza UTF-8 en la sesión para que acentos y ñ se guarden bien (aunque se ejecute desde consola)
+SET NAMES utf8mb4;
+
 -- =========================================================================
 -- PROYECTO FINAL: SISTEMA POS Y ADMINISTRACIÓN PARA PIZZERÍA (RHINOS)
 -- ARCHIVO: 02_datos.sql
@@ -145,7 +148,10 @@ INSERT INTO PRODUCTO_PRECIO (id_producto, id_tamano, variante, precio, stock_act
 
 -- Tarifas de Calzone y Complementos
 INSERT INTO PRODUCTO_PRECIO (id_producto, id_tamano, variante, precio, stock_actual) VALUES
-(18, 9, 'NORMAL', 115.00, NULL),  -- Calzone Orden
+(18, 2, 'NORMAL', 95.00, NULL),   -- Calzone Chico      (precio de ejemplo: ajustar en Inventario)
+(18, 3, 'NORMAL', 115.00, NULL),  -- Calzone Mediano
+(18, 4, 'NORMAL', 145.00, NULL),  -- Calzone Grande
+(18, 5, 'NORMAL', 175.00, NULL),  -- Calzone Extra grande
 (19, 9, 'NORMAL', 125.00, NULL),  -- Alitas Orden
 (19, 10, 'NORMAL', 185.00, NULL), -- Alitas 1/2 Kg
 (20, 9, 'NORMAL', 130.00, NULL),  -- Boneless Orden

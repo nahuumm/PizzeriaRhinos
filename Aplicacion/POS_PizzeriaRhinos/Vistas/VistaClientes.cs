@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.ComponentModel;
 using System.Drawing;
 using System.Windows.Forms;
@@ -206,7 +206,7 @@ namespace POS_PizzeriaRhinos.Vistas
         {
             var f = _tablaHistorial.FilaSeleccionada;
             if (f == null) return;
-            FrmDetallePedido.Mostrar(Shell, Convert.ToInt32(f.Cells["Folio"].Value));
+            if (FrmDetallePedido.Mostrar(Shell, Convert.ToInt32(f.Cells["Folio"].Value))) SeleccionCambiada();
         }
 
         protected override void Dispose(bool disposing)

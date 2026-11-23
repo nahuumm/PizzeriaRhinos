@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Data;
 using MySql.Data.MySqlClient;
 using POS_PizzeriaRhinos.Config;
@@ -13,7 +13,12 @@ namespace POS_PizzeriaRhinos.Datos
             using var conn = ConexionMySQL.ObtenerConexion();
             conn.Open();
             const string sql = @"SELECT i.id_ingrediente, i.nombre AS Ingrediente, i.disponible,
-                                        (SELECT COUNT(*) FROM RECETA_PRODUCTO rp WHERE rp.id_ingrediente = i.id_ingrediente) AS `En recetas`
+                                        (SELECT COUNT(*) FROM RECETA_PRODUCTO rp WHERE rp.id_ingrediente = i.id_ingrediente) AS `En recetas`,
+                                        (SELECT GROUP_CONCAT(p.nombre ORDER BY p.nombre SEPARATOR ', ')
+                                           FROM RECETA_PRODUCTO rp INNER JOIN PRODUCTO p ON p.id_producto = rp.id_producto
+                                          WHERE rp.id_ingrediente = i.id_ingrediente) AS recetas,
+                                        (SELECT MIN(pe.precio_extra) FROM PRECIO_INGREDIENTE_EXTRA pe WHERE pe.id_ingrediente = i.id_ingrediente) AS extra_min,
+                                        (SELECT MAX(pe.precio_extra) FROM PRECIO_INGREDIENTE_EXTRA pe WHERE pe.id_ingrediente = i.id_ingrediente) AS extra_max
                                  FROM INGREDIENTE i
                                  WHERE (@f = '' OR i.nombre LIKE CONCAT('%', @f, '%'))
                                  ORDER BY i.nombre;";
@@ -110,6 +115,24 @@ namespace POS_PizzeriaRhinos.Datos
                 tx.Rollback();
                 throw;
             }
+        }
+
+        /// <summary>Precio del ingrediente cuando se agrega como extra (6.° en adelante), por tamaño.</summary>
+        public DataTable ObtenerPreciosExtra(int idIngrediente)
+        {
+            using var conn = ConexionMySQL.ObtenerConexion();
+            conn.Open();
+            const string sql = @"SELECT t.nombre AS tamano, pe.precio_extra
+                                 FROM PRECIO_INGREDIENTE_EXTRA pe
+                                 INNER JOIN TAMANO_PRESENTACION t ON t.id_tamano = pe.id_tamano
+                                 WHERE pe.id_ingrediente = @id
+                                 ORDER BY t.id_tamano;";
+            using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@id", idIngrediente);
+            using var da = new MySqlDataAdapter(cmd);
+            var dt = new DataTable();
+            da.Fill(dt);
+            return dt;
         }
 
         public void CambiarDisponibilidad(int idIngrediente, bool disponible)

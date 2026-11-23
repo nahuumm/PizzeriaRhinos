@@ -1,4 +1,4 @@
-namespace POS_PizzeriaRhinos.Modelos
+﻿namespace POS_PizzeriaRhinos.Modelos
 {
     /// <summary>Indicadores del día para el tablero (Dashboard).</summary>
     public class ResumenDia

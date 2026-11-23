@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.ComponentModel;
 using System.Data;
 using System.Drawing;
@@ -94,7 +94,9 @@ namespace POS_PizzeriaRhinos.Vistas
             _tabla.Grid.CellDoubleClick += (_, e) =>
             {
                 if (e.RowIndex >= 0 && (_grpReporte.Valor as string) == "CORTE" && _tabla.Grid.Columns.Contains("Folio"))
-                    FrmDetallePedido.Mostrar(Shell, Convert.ToInt32(_tabla.Grid.Rows[e.RowIndex].Cells["Folio"].Value));
+                {
+                    if (FrmDetallePedido.Mostrar(Shell, Convert.ToInt32(_tabla.Grid.Rows[e.RowIndex].Cells["Folio"].Value))) Generar();
+                }
             };
 
             Diseno.Apilar(this, _tabla, encabezado, Diseno.Espacio(12), filtros, Diseno.Espacio(6), filaKpi, Diseno.Espacio(6), _grpReporte, _lblTituloReporte);

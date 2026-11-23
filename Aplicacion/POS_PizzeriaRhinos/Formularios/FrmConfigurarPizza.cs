@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -12,11 +12,13 @@ using POS_PizzeriaRhinos.Modelos;
 
 namespace POS_PizzeriaRhinos.Formularios
 {
-    public enum ModoPizza { Normal, Promo2x1, Mostrador }
+    public enum ModoPizza { Normal, Promo2x1, Mostrador, Calzone }
 
     /// <summary>
     /// Asistente para configurar una pizza en pasos grandes (pensado para pantalla táctil):
-    ///   1. Tamaño  →  2. Especialidad (completa o mitad y mitad)  →  3. Ingredientes SIN / CON  →  4. Fase final.
+    ///   1. Tamaño  →  2. Masa y orilla (fase final)  →  3. Sabor / especialidad (completa o mitad y mitad)  →  4. Ingredientes SIN / CON.
+    /// El tamaño va primero porque define el precio base y qué opciones existen (p. ej. la masa de sartén
+    /// solo para Grande y Extragrande). Cambiar el tamaño recalcula los precios sin borrar lo ya elegido.
     /// Implementa las reglas de negocio 3 (límite de 5 ingredientes, cobro desde el 6.°), 4 (fase final obligatoria),
     /// 5 (2x1 solo en Mediana/Grande/Extragrande y mitades) y 6 (pizza de mostrador sin mitades ni agregados).
     /// </summary>
@@ -26,7 +28,7 @@ namespace POS_PizzeriaRhinos.Formularios
         private const string PasoTamano = "Tamaño";
         private const string PasoEspecialidad = "Especialidad";
         private const string PasoIngredientes = "Ingredientes";
-        private const string PasoFinal = "Fase final";
+        private const string PasoMasa = "Masa y orilla";
 
         private readonly DataTable _menu;
         private readonly DataTable _ingredientes;
@@ -46,6 +48,7 @@ namespace POS_PizzeriaRhinos.Formularios
         private string _destinoCon = "COMPLETA";
         private readonly List<ModificadorItem> _mods = new();
         private string _masa = "GRUESA";
+        private bool _avisoSarten;
         private bool _orilla, _quesoExtra;
         private Dictionary<string, decimal> _tarifas = new(StringComparer.OrdinalIgnoreCase);
 
@@ -69,7 +72,12 @@ namespace POS_PizzeriaRhinos.Formularios
             _ingredientes = ingredientes;
             _textoRecetas = textoRecetas;
             _modo = modo;
-            _categoria = modo == ModoPizza.Mostrador ? "PIZZA_MOSTRADOR" : "PIZZA";
+            _categoria = modo switch
+            {
+                ModoPizza.Mostrador => "PIZZA_MOSTRADOR",
+                ModoPizza.Calzone => "CALZONE",
+                _ => "PIZZA"
+            };
             _tamanoFijo = idTamanoFijo.HasValue;
 
             Text = titulo;
@@ -85,14 +93,19 @@ namespace POS_PizzeriaRhinos.Formularios
             Size = new Size(Math.Min(UITheme.S(1220), pantalla.Width - 40), Math.Min(UITheme.S(800), pantalla.Height - 40));
             MinimumSize = UITheme.S(960, 640);
 
-            // Pasos según el modo
-            if (!_tamanoFijo) _pasos.Add(PasoTamano);
-            if (modo != ModoPizza.Mostrador)
+            // Pizza de mostrador o calzone: si solo hay un producto en la categoría, se elige solo (no hay sabor que escoger)
+            if ((modo == ModoPizza.Mostrador || modo == ModoPizza.Calzone) && idProductoInicial == null)
             {
-                _pasos.Add(PasoEspecialidad);
-                _pasos.Add(PasoIngredientes);
+                var productos = FilasPizza().Select(r => Convert.ToInt32(r["id_producto"])).Distinct().ToList();
+                if (productos.Count == 1) idProductoInicial = productos[0];
             }
-            _pasos.Add(PasoFinal);
+
+            // Pasos según el modo: tamaño → sabor → ingredientes → masa y orilla (fase final, Regla 4 del Análisis).
+            // Calzone: igual que una pizza pero sin mitades, sin cambio de masa y sin orilla (al final solo queso extra).
+            if (!_tamanoFijo) _pasos.Add(PasoTamano);
+            if (modo == ModoPizza.Normal || modo == ModoPizza.Promo2x1 || idProductoInicial == null) _pasos.Add(PasoEspecialidad);
+            if (modo != ModoPizza.Mostrador) _pasos.Add(PasoIngredientes);
+            _pasos.Add(PasoMasa);
 
             // ---------------- Encabezado ----------------
             var encabezado = new Panel { Dock = DockStyle.Top, Height = UITheme.S(122), Padding = UITheme.P(24, 14, 24, 6), BackColor = UITheme.Superficie };
@@ -124,7 +137,7 @@ namespace POS_PizzeriaRhinos.Formularios
             // ---------------- Resumen (derecha) ----------------
             var colResumen = new Panel { Dock = DockStyle.Right, Width = UITheme.S(350), Padding = UITheme.P(0, 18, 20, 18) };
             var cardResumen = new PanelRedondeado { Dock = DockStyle.Fill, Padding = UITheme.P(18) };
-            var lblTitResumen = new Label { Text = "🧾  Resumen de la pizza", Font = UITheme.Titulo(15f), ForeColor = UITheme.Texto, AutoSize = false, Height = UITheme.S(34) };
+            var lblTitResumen = new Label { Text = EsCalzone ? "🧾  Resumen del calzone" : "🧾  Resumen de la pizza", Font = UITheme.Titulo(15f), ForeColor = UITheme.Texto, AutoSize = false, Height = UITheme.S(34) };
             _lblResumen = new Label { Font = UITheme.Fuente(10.5f), ForeColor = UITheme.Texto, AutoSize = false };
             _lblTotal = new Label
             {
@@ -233,10 +246,20 @@ namespace POS_PizzeriaRhinos.Formularios
             ActualizarResumen();
         }
 
+        private bool EsCalzone => _modo == ModoPizza.Calzone;
+
+        private string NombrePaso(string paso) => paso switch
+        {
+            PasoMasa when EsCalzone => "Queso extra",
+            PasoEspecialidad => "Sabor",
+            _ => paso
+        };
+
         private bool ValidarPaso(string paso, bool mostrar)
         {
             string? error = null;
             if (paso == PasoTamano && _idTamano == null) error = "Elige el tamaño de la pizza.";
+            if (paso == PasoMasa && _masa == "SARTEN" && !PermiteSarten()) error = "La masa de sartén solo existe en Grande y Extragrande.";
             if (paso == PasoEspecialidad)
             {
                 if (_idProd1 == null) error = _mitades ? "Elige la especialidad de la Mitad 1." : "Elige la especialidad de la pizza.";
@@ -273,7 +296,7 @@ namespace POS_PizzeriaRhinos.Formularios
             for (int i = 0; i < _pasos.Count; i++)
             {
                 int indice = i;
-                var b = new BotonRhino($"{i + 1}. {_pasos[i]}", EstiloBoton.Secundario)
+                var b = new BotonRhino($"{i + 1}. {NombrePaso(_pasos[i])}", EstiloBoton.Secundario)
                 {
                     Size = UITheme.S(190, 44),
                     Seleccionado = i == _paso,
@@ -386,7 +409,7 @@ namespace POS_PizzeriaRhinos.Formularios
                 case PasoTamano: ConstruirPasoTamano(); break;
                 case PasoEspecialidad: ConstruirPasoEspecialidad(); break;
                 case PasoIngredientes: ConstruirPasoIngredientes(); break;
-                case PasoFinal: ConstruirPasoFinal(); break;
+                case PasoMasa: ConstruirPasoMasa(); break;
             }
             _contenido.ResumeLayout(true);
         }
@@ -410,7 +433,7 @@ namespace POS_PizzeriaRhinos.Formularios
                 .Select(g => new
                 {
                     Id = g.Key,
-                    Nombre = Convert.ToString(g.First()["tamano_presentacion"]) ?? "",
+                    Nombre = UITheme.NombreTamano(_categoria, Convert.ToString(g.First()["tamano_presentacion"])),
                     Precio = g.Min(r => Convert.ToDecimal(r["precio"]))
                 })
                 .OrderBy(t => t.Id)
@@ -440,7 +463,14 @@ namespace POS_PizzeriaRhinos.Formularios
         {
             _idTamano = idTamano;
             var r = FilasPizza(x => Convert.ToInt32(x["id_tamano"]) == idTamano).FirstOrDefault();
-            _nomTamano = r == null ? "" : Convert.ToString(r["tamano_presentacion"]) ?? "";
+            _nomTamano = r == null ? "" : UITheme.NombreTamano(_categoria, Convert.ToString(r["tamano_presentacion"]));
+            // Regla: sartén solo en Grande y Extragrande. Si ya estaba elegida y el tamaño no la permite,
+            // se regresa a masa gruesa (por defecto) y se avisa en el paso de masa.
+            if (_masa == "SARTEN" && !PermiteSarten())
+            {
+                _masa = "GRUESA";
+                _avisoSarten = true;
+            }
             try
             {
                 _tarifas = _productoDao.ObtenerTarifasOpcionFinal(idTamano);
@@ -454,6 +484,11 @@ namespace POS_PizzeriaRhinos.Formularios
 
         private void ConstruirPasoEspecialidad()
         {
+            if (_modo == ModoPizza.Mostrador || EsCalzone)
+            {
+                ConstruirListaEspecialidades(EsCalzone ? "Elige el calzone" : "Elige la pizza de mostrador");
+                return;
+            }
             Seccion("¿Pizza completa o mitad y mitad?");
             var tipo = Grupo(UITheme.S(230, 64));
             tipo.Agregar("Pizza completa", false, "🍕");
@@ -487,7 +522,12 @@ namespace POS_PizzeriaRhinos.Formularios
                 mitad.ValorCambiado += (_, _) => { _eligiendoMitad2 = mitad.Valor is bool v && v; Refrescar(); };
             }
 
-            Seccion(_mitades ? (_eligiendoMitad2 ? "Especialidad de la Mitad 2" : "Especialidad de la Mitad 1") : "Elige la especialidad");
+            ConstruirListaEspecialidades(_mitades ? (_eligiendoMitad2 ? "Sabor de la Mitad 2" : "Sabor de la Mitad 1") : "Elige el sabor");
+        }
+
+        private void ConstruirListaEspecialidades(string titulo)
+        {
+            Seccion(titulo);
             var bloque = Bloque();
             var especialidades = FilasPizza(r => _idTamano == null || Convert.ToInt32(r["id_tamano"]) == _idTamano.Value)
                 .GroupBy(r => Convert.ToInt32(r["id_producto"]))
@@ -549,7 +589,7 @@ namespace POS_PizzeriaRhinos.Formularios
             int max = MaxIngredientesBase();
             int efectivos = ContarIngredientesEfectivos();
             Seccion("Ingredientes", $"Los primeros {max} ingredientes no tienen costo; a partir del {max + 1}.° se cobra según el tamaño.");
-            Nota($"Ingredientes en la pizza: {efectivos} de {max} incluidos" + (efectivos > max ? $"  ·  {efectivos - max} con costo extra" : ""),
+            Nota($"Ingredientes en {(EsCalzone ? "el calzone" : "la pizza")}: {efectivos} de {max} incluidos" + (efectivos > max ? $"  ·  {efectivos - max} con costo extra" : ""),
                 efectivos > max ? UITheme.RojoOscuro : UITheme.Verde);
 
             // ---- SIN: quitar ingredientes de la receta ----
@@ -645,9 +685,18 @@ namespace POS_PizzeriaRhinos.Formularios
             }
         }
 
-        private void ConstruirPasoFinal()
+        /// <summary>Regla de negocio: la masa de sartén solo se vende en Grande y Extragrande.</summary>
+        private bool PermiteSarten()
         {
-            Seccion("Fase final", "Antes de mandar a cocina, pregunta al cliente por la masa, la orilla y el queso.");
+            string t = (_nomTamano ?? "").Replace(" ", "").Replace("-", "").ToUpperInvariant();
+            return t == "GRANDE" || t == "EXTRAGRANDE";
+        }
+
+        private void ConstruirPasoMasa()
+        {
+            Seccion(EsCalzone ? "Queso extra" : "Masa y orilla",
+                EsCalzone ? "El calzone lleva la masa de la casa y no tiene orilla de queso; solo pregunta si lo quiere con queso extra."
+                          : "Pregunta al cliente por el tipo de masa, la orilla de queso y el queso extra.");
             if (_idTamano == null)
             {
                 Nota("Primero elige el tamaño.", UITheme.Rojo);
@@ -657,15 +706,34 @@ namespace POS_PizzeriaRhinos.Formularios
             decimal orilla = _tarifas.TryGetValue("ORILLA_QUESO", out var o) ? o : 0m;
             decimal queso = _tarifas.TryGetValue("QUESO_EXTRA", out var q) ? q : 0m;
 
+            if (EsCalzone)
+            {
+                // Calzone: sin cambio de masa ni orilla
+                _masa = "GRUESA";
+                _orilla = false;
+                var bloqueCal = Bloque();
+                var bQuesoCal = new BotonRhino("Queso extra", EstiloBoton.Secundario, "🧀") { Size = UITheme.S(260, 80), Subtexto = "+" + UITheme.Dinero(queso), Seleccionado = _quesoExtra };
+                bQuesoCal.Click += (_, _) => { _quesoExtra = !_quesoExtra; bQuesoCal.Seleccionado = _quesoExtra; ActualizarResumen(); };
+                bloqueCal.Controls.Add(bQuesoCal);
+                return;
+            }
+            bool permiteSarten = PermiteSarten();
+
             Seccion("Tipo de masa");
+            if (_avisoSarten)
+            {
+                Nota($"⚠ La masa de sartén no existe en tamaño {_nomTamano}; se cambió a masa gruesa.", UITheme.RojoOscuro);
+                _avisoSarten = false;
+            }
             var masa = Grupo(UITheme.S(230, 80));
             masa.Agregar("Gruesa", "GRUESA", "", "Incluida (por defecto)");
             masa.Agregar("Delgada", "DELGADA", "", "Sin costo");
-            masa.Agregar("Sartén", "SARTEN", "", "+" + UITheme.Dinero(sarten));
+            var bSarten = masa.Agregar("Sartén", "SARTEN", "", permiteSarten ? "+" + UITheme.Dinero(sarten) : "Solo Grande y Extragrande");
+            bSarten.Enabled = permiteSarten;
             masa.Seleccionar(_masa);
             masa.ValorCambiado += (_, _) => { _masa = masa.Valor as string ?? "GRUESA"; ActualizarResumen(); };
 
-            Seccion("Extras de queso");
+            Seccion("Orilla y queso");
             var bloque = Bloque();
             var bOrilla = new BotonRhino("Orilla de queso", EstiloBoton.Secundario, "🧀") { Size = UITheme.S(260, 80), Subtexto = "+" + UITheme.Dinero(orilla), Seleccionado = _orilla };
             bOrilla.Click += (_, _) => { _orilla = !_orilla; bOrilla.Seleccionado = _orilla; ActualizarResumen(); };
@@ -675,7 +743,7 @@ namespace POS_PizzeriaRhinos.Formularios
             bloque.Controls.Add(bQueso);
 
             if (_modo == ModoPizza.Promo2x1)
-                Nota("En el 2x1 la fase final se cobra por separado en cada pizza.", UITheme.RojoOscuro);
+                Nota("En el 2x1 la masa especial, la orilla y el queso extra se cobran por separado en cada pizza.", UITheme.RojoOscuro);
         }
 
         // =====================================================================
@@ -751,7 +819,7 @@ namespace POS_PizzeriaRhinos.Formularios
             var sb = new StringBuilder();
             string especialidad = _idProd1 == null ? "Sin elegir" :
                 (_mitades ? $"{_nomProd1} / {(_idProd2 == null ? "¿Mitad 2?" : _nomProd2)}" : _nomProd1);
-            sb.AppendLine($"🍕 {especialidad}");
+            sb.AppendLine($"{(EsCalzone ? "🥟" : "🍕")} {especialidad}");
             sb.AppendLine($"📏 Tamaño: {(_idTamano == null ? "Sin elegir" : _nomTamano)}");
             if (_modo == ModoPizza.Promo2x1) sb.AppendLine("⭐ Parte de una promoción 2x1");
             if (_modo == ModoPizza.Mostrador) sb.AppendLine("🏪 Tarifa exclusiva de mostrador");
@@ -767,7 +835,7 @@ namespace POS_PizzeriaRhinos.Formularios
                 sb.AppendLine();
             }
             string masaTexto = _masa switch { "DELGADA" => "Delgada", "SARTEN" => "Sartén", _ => "Gruesa" };
-            sb.AppendLine($"Masa: {masaTexto}");
+            if (!EsCalzone) sb.AppendLine($"Masa: {masaTexto}");
             if (_orilla) sb.AppendLine("Orilla de queso");
             if (_quesoExtra) sb.AppendLine("Queso extra");
 
@@ -775,7 +843,7 @@ namespace POS_PizzeriaRhinos.Formularios
             sb.AppendLine();
             sb.AppendLine($"Precio base:            {UITheme.Dinero(baseP)}");
             sb.AppendLine($"Ingredientes extra:   {UITheme.Dinero(ing)}");
-            sb.AppendLine($"Fase final:                {UITheme.Dinero(fase)}");
+            sb.AppendLine($"Masa y orilla:          {UITheme.Dinero(fase)}");
             _lblResumen.Text = sb.ToString();
             _lblTotal.Text = UITheme.Dinero(baseP + ing + fase);
         }
@@ -795,6 +863,19 @@ namespace POS_PizzeriaRhinos.Formularios
             {
                 Dialogo.Advertencia(this, "La pizza de mostrador solo lleva 1 ingrediente y no admite mitades ni ingredientes agregados.");
                 return null;
+            }
+
+            if (_masa == "SARTEN" && !PermiteSarten())
+            {
+                Dialogo.Advertencia(this, "La masa de sartén solo existe en Grande y Extragrande. Elige otra masa.");
+                return null;
+            }
+            if (EsCalzone)
+            {
+                // Reglas del calzone: masa de la casa, sin orilla y sin mitades
+                _masa = "GRUESA";
+                _orilla = false;
+                _mitades = false;
             }
 
             var (baseP, ing, fase) = CalcularPrecios();

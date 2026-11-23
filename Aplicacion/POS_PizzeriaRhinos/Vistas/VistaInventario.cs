@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.ComponentModel;
 using System.Data;
 using System.Drawing;
@@ -12,7 +12,7 @@ namespace POS_PizzeriaRhinos.Vistas
 {
     /// <summary>
     /// Inventario del administrador:
-    ///  • Ingredientes: CRUD y "HAY / NO HAY" (boceto pág. 5, Regla 8 — control manual sin gramaje).
+    ///  • Ingredientes: CRUD, filtros, detalle (recetas donde se usa y tarifa de extra) y estado Disponible / Agotado (Regla 8 — control manual sin gramaje).
     ///  • Bebidas: stock del refrigerador (Regla 7 — el trigger descuenta al vender).
     ///  • Productos y precios: tarifas por tamaño y activar/desactivar productos del menú.
     /// </summary>
@@ -32,6 +32,13 @@ namespace POS_PizzeriaRhinos.Vistas
         private readonly TextBox _txtStock;
         private string _tab = "ING";
 
+        // Ingredientes
+        private DataTable _dtIng = new();
+        private readonly GrupoOpciones _grpFiltroIng;
+        private readonly TextBox _txtBuscarIng;
+        private readonly Label _lblIngNombre, _lblIngEstado, _lblIngRecetas, _lblIngPrecios;
+        private readonly BotonRhino _btnIngDisponible, _btnIngAgotado, _btnIngRenombrar, _btnIngEliminar;
+
         public VistaInventario(FrmPrincipal shell) : base(shell)
         {
             var encabezado = new EncabezadoModulo("Inventario", "Ingredientes disponibles, stock de bebidas y precios del menú.", "📦");
@@ -46,16 +53,72 @@ namespace POS_PizzeriaRhinos.Vistas
             _host = new Panel();
 
             // =========================== INGREDIENTES ===========================
+            // Mismo esquema que Bebidas: filtros arriba, tabla al centro y tarjeta de detalle con acciones a la derecha.
             _pnlIngredientes = new Panel { Dock = DockStyle.Fill };
+
+            _grpFiltroIng = new GrupoOpciones { TamanoBoton = UITheme.S(200, 50) };
+            _grpFiltroIng.Agregar("Todos", "TODOS", "≡");
+            _grpFiltroIng.Agregar("Disponibles", "DISP", "✔");
+            _grpFiltroIng.Agregar("Agotados", "AGOT", "✖");
+            _grpFiltroIng.Seleccionar("TODOS");
+            _grpFiltroIng.ValorCambiado += (_, _) => FiltrarIngredientes();
+            _txtBuscarIng = new TextBox { Width = UITheme.S(240), MaxLength = 60, PlaceholderText = "Buscar ingrediente…", Margin = UITheme.P(14, 10, 4, 4) };
+            UITheme.EstilizarTextBox(_txtBuscarIng);
+            _txtBuscarIng.TextChanged += (_, _) => FiltrarIngredientes();
+            var filtrosIng = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = true };
+            filtrosIng.Controls.Add(_grpFiltroIng);
+            filtrosIng.Controls.Add(_txtBuscarIng);
+
             _tablaIng = new PanelTabla();
-            _tablaIng.Grid.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) AlternarIngrediente(); };
-            var colIng = ColumnaAcciones("Ingrediente seleccionado",
-                Boton("Cambiar HAY / NO HAY", EstiloBoton.Ambar, "⇄", AlternarIngrediente),
-                Boton("Nuevo ingrediente", EstiloBoton.Primario, "➕", NuevoIngrediente),
-                Boton("Renombrar", EstiloBoton.Secundario, "✏", RenombrarIngrediente),
-                Boton("Eliminar", EstiloBoton.Secundario, "🗑", EliminarIngrediente));
-            var notaIng = Nota("Los ingredientes marcados como NO HAY no se pueden agregar en caja. No se lleva control por gramaje.");
-            Diseno.Apilar(_pnlIngredientes, _tablaIng, notaIng);
+            _tablaIng.Grid.SelectionChanged += (_, _) => IngredienteSeleccionado();
+            _tablaIng.Grid.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) RenombrarIngrediente(); };
+
+            // ---- Tarjeta de detalle ----
+            Label Titulo(string t) => new Label { Text = t, Font = UITheme.FuenteEtiqueta, ForeColor = UITheme.TextoSuave, Height = UITheme.S(24), TextAlign = ContentAlignment.BottomLeft };
+            var lblTitDet = new Label { Text = "Detalle del ingrediente", Font = UITheme.Titulo(15f), ForeColor = UITheme.Texto, Height = UITheme.S(34) };
+            _lblIngNombre = new Label { Text = "Selecciona un ingrediente", Font = UITheme.Titulo(19f), ForeColor = UITheme.Texto, Height = UITheme.S(40), AutoEllipsis = true };
+            _lblIngEstado = new Label { Font = UITheme.Fuente(11f, FontStyle.Bold), Height = UITheme.S(32), TextAlign = ContentAlignment.MiddleLeft, Padding = UITheme.P(10, 0, 0, 0) };
+
+            _btnIngDisponible = new BotonRhino("Disponible", EstiloBoton.Exito, "✔") { Dock = DockStyle.Fill, Margin = UITheme.P(0, 0, 4, 0), Font = UITheme.Fuente(11f, FontStyle.Bold) };
+            _btnIngDisponible.Click += (_, _) => CambiarDisponibilidadIngrediente(true);
+            _btnIngAgotado = new BotonRhino("Agotado", EstiloBoton.Peligro, "✖") { Dock = DockStyle.Fill, Margin = UITheme.P(4, 0, 0, 0), Font = UITheme.Fuente(11f, FontStyle.Bold) };
+            _btnIngAgotado.Click += (_, _) => CambiarDisponibilidadIngrediente(false);
+            var filaEstado = new TableLayoutPanel { ColumnCount = 2, RowCount = 1, Height = UITheme.S(58), Margin = new Padding(0) };
+            filaEstado.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+            filaEstado.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+            filaEstado.Controls.Add(_btnIngDisponible, 0, 0);
+            filaEstado.Controls.Add(_btnIngAgotado, 1, 0);
+
+            _lblIngRecetas = new Label { Font = UITheme.Fuente(10.5f), ForeColor = UITheme.Texto, Height = UITheme.S(66), AutoEllipsis = true };
+            _lblIngPrecios = new Label { Font = new Font("Consolas", 10f), ForeColor = UITheme.Texto, Height = UITheme.S(92) };
+
+            _btnIngRenombrar = new BotonRhino("Renombrar", EstiloBoton.Secundario, "✏") { Dock = DockStyle.Fill, Margin = UITheme.P(0, 0, 4, 0), Font = UITheme.Fuente(11f, FontStyle.Bold) };
+            _btnIngRenombrar.Click += (_, _) => RenombrarIngrediente();
+            _btnIngEliminar = new BotonRhino("Eliminar", EstiloBoton.Secundario, "🗑") { Dock = DockStyle.Fill, Margin = UITheme.P(4, 0, 0, 0), Font = UITheme.Fuente(11f, FontStyle.Bold) };
+            _btnIngEliminar.Click += (_, _) => EliminarIngrediente();
+            var filaEditar = new TableLayoutPanel { ColumnCount = 2, RowCount = 1, Height = UITheme.S(56), Margin = new Padding(0), Dock = DockStyle.Bottom };
+            filaEditar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+            filaEditar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+            filaEditar.Controls.Add(_btnIngRenombrar, 0, 0);
+            filaEditar.Controls.Add(_btnIngEliminar, 1, 0);
+            var btnNuevoIng = new BotonRhino("Nuevo ingrediente", EstiloBoton.Primario, "➕") { Height = UITheme.S(58), Dock = DockStyle.Bottom };
+            btnNuevoIng.Click += (_, _) => NuevoIngrediente();
+
+            var cardIng = new PanelRedondeado { Dock = DockStyle.Fill, Padding = UITheme.P(16), AutoScroll = true };
+            Diseno.Apilar(cardIng, null, lblTitDet, _lblIngNombre, _lblIngEstado, Diseno.Espacio(8), Titulo("CAMBIAR ESTADO EN CAJA"), filaEstado,
+                Diseno.Espacio(10), Titulo("SE USA EN LA RECETA DE"), _lblIngRecetas, Titulo("PRECIO COMO EXTRA (DEL 6.° EN ADELANTE)"), _lblIngPrecios);
+            var espacioAcc = Diseno.Espacio(8);
+            espacioAcc.Dock = DockStyle.Bottom;
+            cardIng.Controls.Add(filaEditar);
+            cardIng.Controls.Add(espacioAcc);
+            cardIng.Controls.Add(btnNuevoIng);
+            var colIng = new Panel { Dock = DockStyle.Right, Width = UITheme.S(330), Padding = UITheme.P(12, 0, 0, 0) };
+            colIng.Controls.Add(cardIng);
+
+            var notaIng = Nota("Un ingrediente AGOTADO no se ofrece en caja y la base de datos rechaza venderlo (trigger). No se controla por gramaje: se marca manualmente.");
+            notaIng.Dock = DockStyle.Bottom;
+            Diseno.Apilar(_pnlIngredientes, _tablaIng, filtrosIng, Diseno.Espacio(6));
+            _pnlIngredientes.Controls.Add(notaIng);
             _pnlIngredientes.Controls.Add(colIng);
 
             // =========================== BEBIDAS ===========================
@@ -117,9 +180,12 @@ namespace POS_PizzeriaRhinos.Vistas
             _grpCategoria.ValorCambiado += (_, _) => ErroresUi.Intentar(Shell, CargarProductos);
             _tablaProd = new PanelTabla();
             _tablaProd.Grid.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) CambiarPrecio(); };
-            var colProd = ColumnaAcciones("Producto seleccionado",
-                Boton("Cambiar precio", EstiloBoton.Primario, "💲", CambiarPrecio),
-                Boton("Activar / desactivar producto", EstiloBoton.Ambar, "⇄", AlternarProducto));
+            var colProd = ColumnaAcciones("Productos del menú",
+                Boton("Nuevo producto", EstiloBoton.Primario, "➕", NuevoProducto),
+                Boton("Editar producto", EstiloBoton.Secundario, "📝", EditarProducto),
+                Boton("Renombrar", EstiloBoton.Secundario, "✏", RenombrarProducto),
+                Boton("Cambiar precio", EstiloBoton.Secundario, "💲", CambiarPrecio),
+                Boton("Activar / desactivar", EstiloBoton.Ambar, "⇄", AlternarProducto));
             Diseno.Apilar(_pnlProductos, _tablaProd, _grpCategoria, Diseno.Espacio(8));
             _pnlProductos.Controls.Add(colProd);
 
@@ -191,40 +257,148 @@ namespace POS_PizzeriaRhinos.Vistas
         private void CargarIngredientes()
         {
             int? sel = IdFila(_tablaIng, "id_ingrediente");
-            var dt = _ingredienteDao.Listar();
-            dt.Columns.Add("Estado", typeof(string));
-            foreach (DataRow r in dt.Rows) r["Estado"] = Convert.ToBoolean(r["disponible"]) ? "✔  HAY" : "✖  NO HAY";
-            _tablaIng.Mostrar(dt, "No hay ingredientes registrados.");
-            var g = _tablaIng.Grid;
-            UITheme.OcultarColumnas(g, "id_ingrediente", "disponible");
-            if (g.Columns.Contains("Estado"))
+            _dtIng = _ingredienteDao.Listar();
+            _dtIng.Columns.Add("Estado", typeof(string));
+            _dtIng.Columns.Add("Usado en", typeof(string));
+            _dtIng.Columns.Add("Precio como extra", typeof(string));
+            int disponibles = 0;
+            foreach (DataRow r in _dtIng.Rows)
             {
-                g.Columns["Estado"].DisplayIndex = 1;
-                g.Columns["Estado"].DefaultCellStyle.Font = UITheme.FuenteNegrita;
+                bool disp = Convert.ToBoolean(r["disponible"]);
+                if (disp) disponibles++;
+                r["Estado"] = disp ? "● Disponible" : "● Agotado";
+                int recetas = Convert.ToInt32(r["En recetas"]);
+                r["Usado en"] = recetas == 0 ? "Sin recetas" : recetas == 1 ? "1 receta" : $"{recetas} recetas";
+                r["Precio como extra"] = r["extra_min"] == DBNull.Value
+                    ? "Sin tarifa"
+                    : Convert.ToDecimal(r["extra_min"]) == Convert.ToDecimal(r["extra_max"])
+                        ? UITheme.Dinero(Convert.ToDecimal(r["extra_min"]))
+                        : $"{UITheme.Dinero(Convert.ToDecimal(r["extra_min"]))} a {UITheme.Dinero(Convert.ToDecimal(r["extra_max"]))}";
             }
-            g.CellFormatting -= ColorearHayNoHay;
-            g.CellFormatting += ColorearHayNoHay;
+
+            // Contadores en los filtros
+            int total = _dtIng.Rows.Count;
+            foreach (var b in _grpFiltroIng.Botones)
+            {
+                b.Text = (b.Valor as string) switch
+                {
+                    "DISP" => $"Disponibles ({disponibles})",
+                    "AGOT" => $"Agotados ({total - disponibles})",
+                    _ => $"Todos ({total})"
+                };
+            }
+
+            FiltrarIngredientes();
             Reseleccionar(_tablaIng, "id_ingrediente", sel);
+            IngredienteSeleccionado();
         }
 
-        private void ColorearHayNoHay(object? sender, DataGridViewCellFormattingEventArgs e)
+        private void FiltrarIngredientes()
+        {
+            var vista = _dtIng.DefaultView;
+            var filtros = new System.Collections.Generic.List<string>();
+            if (_grpFiltroIng.Valor as string == "DISP") filtros.Add("disponible = true");
+            if (_grpFiltroIng.Valor as string == "AGOT") filtros.Add("disponible = false");
+            string q = _txtBuscarIng.Text.Trim().Replace("'", "''").Replace("[", "[[]").Replace("%", "[%]").Replace("*", "[*]");
+            if (q.Length > 0) filtros.Add($"Ingrediente LIKE '%{q}%'");
+            if (_dtIng.Columns.Contains("disponible")) vista.RowFilter = string.Join(" AND ", filtros);
+            vista.Sort = _dtIng.Columns.Contains("Ingrediente") ? "Ingrediente ASC" : "";
+
+            string vacio = _grpFiltroIng.Valor as string == "AGOT" ? "No hay ingredientes agotados. ¡Todo disponible para vender!"
+                         : q.Length > 0 ? $"No se encontró \"{_txtBuscarIng.Text.Trim()}\"."
+                         : "No hay ingredientes registrados.";
+            _tablaIng.Mostrar(vista, vacio);
+            var g = _tablaIng.Grid;
+            UITheme.OcultarColumnas(g, "id_ingrediente", "disponible", "recetas", "extra_min", "extra_max", "En recetas");
+            void Columna(string nombre, int orden, float peso)
+            {
+                if (!g.Columns.Contains(nombre)) return;
+                g.Columns[nombre].DisplayIndex = orden;
+                g.Columns[nombre].FillWeight = peso;
+            }
+            Columna("Ingrediente", 0, 150);
+            Columna("Estado", 1, 100);
+            Columna("Usado en", 2, 90);
+            Columna("Precio como extra", 3, 120);
+            if (g.Columns.Contains("Estado")) g.Columns["Estado"].DefaultCellStyle.Font = UITheme.FuenteNegrita;
+            g.CellFormatting -= ColorearEstadoIngrediente;
+            g.CellFormatting += ColorearEstadoIngrediente;
+            IngredienteSeleccionado();
+        }
+
+        private void ColorearEstadoIngrediente(object? sender, DataGridViewCellFormattingEventArgs e)
         {
             var g = _tablaIng.Grid;
             if (e.RowIndex < 0 || e.ColumnIndex < 0 || e.CellStyle == null || g.Columns[e.ColumnIndex].Name != "Estado") return;
-            bool hay = Convert.ToString(e.Value)?.Contains("NO HAY") != true;
-            e.CellStyle.ForeColor = hay ? UITheme.Verde : UITheme.RojoOscuro;
-            e.CellStyle.BackColor = hay ? UITheme.VerdeSuave : UITheme.RojoSuave;
+            bool disp = Convert.ToString(e.Value)?.Contains("Disponible") == true;
+            e.CellStyle.ForeColor = disp ? UITheme.Verde : UITheme.RojoOscuro;
+            e.CellStyle.BackColor = disp ? UITheme.VerdeSuave : UITheme.RojoSuave;
             e.CellStyle.SelectionForeColor = e.CellStyle.ForeColor;
             e.CellStyle.SelectionBackColor = UITheme.Oscurecer(e.CellStyle.BackColor, 0.05f);
         }
 
-        private void AlternarIngrediente()
+        /// <summary>Llena la tarjeta de detalle con el ingrediente seleccionado.</summary>
+        private void IngredienteSeleccionado()
+        {
+            var f = _tablaIng.FilaSeleccionada;
+            bool hay = f != null;
+            _btnIngRenombrar.Enabled = hay;
+            _btnIngEliminar.Enabled = hay;
+            if (!hay)
+            {
+                _lblIngNombre.Text = "Selecciona un ingrediente";
+                _lblIngEstado.Text = "";
+                _lblIngEstado.BackColor = UITheme.Superficie;
+                _lblIngRecetas.Text = "—";
+                _lblIngPrecios.Text = "—";
+                _btnIngDisponible.Enabled = false;
+                _btnIngAgotado.Enabled = false;
+                return;
+            }
+
+            int id = Convert.ToInt32(f!.Cells["id_ingrediente"].Value);
+            bool disp = Convert.ToBoolean(f.Cells["disponible"].Value);
+            _lblIngNombre.Text = Convert.ToString(f.Cells["Ingrediente"].Value);
+            _lblIngEstado.Text = disp ? "● Disponible: se ofrece en caja" : "● Agotado: no se ofrece en caja";
+            _lblIngEstado.ForeColor = disp ? UITheme.Verde : UITheme.RojoOscuro;
+            _lblIngEstado.BackColor = disp ? UITheme.VerdeSuave : UITheme.RojoSuave;
+            // Solo se habilita el cambio que tiene sentido según el estado actual
+            _btnIngDisponible.Enabled = !disp;
+            _btnIngAgotado.Enabled = disp;
+
+            string recetas = Convert.ToString(f.Cells["recetas"].Value) ?? "";
+            _lblIngRecetas.Text = recetas.Length == 0 ? "No forma parte de ninguna receta (solo se agrega como extra)." : recetas;
+
+            try
+            {
+                var precios = _ingredienteDao.ObtenerPreciosExtra(id);
+                var lineas = new System.Collections.Generic.List<string>();
+                for (int i = 0; i < precios.Rows.Count; i += 2)
+                {
+                    string Celda(int k) => $"{Convert.ToString(precios.Rows[k]["tamano"]),-11}{Convert.ToDecimal(precios.Rows[k]["precio_extra"]).ToString("C0", UITheme.Cultura),5}";
+                    lineas.Add(i + 1 < precios.Rows.Count ? $"{Celda(i)}   {Celda(i + 1)}" : Celda(i));
+                }
+                _lblIngPrecios.Text = lineas.Count == 0 ? "Sin tarifa de extra registrada." : string.Join("\n", lineas);
+            }
+            catch (Exception ex)
+            {
+                _lblIngPrecios.Text = "No se pudieron leer las tarifas: " + ErroresUi.Amigable(ex).Split('\n')[0];
+            }
+        }
+
+        private void CambiarDisponibilidadIngrediente(bool disponible)
         {
             var f = _tablaIng.FilaSeleccionada;
             if (f == null) { Dialogo.Info(Shell, "Selecciona un ingrediente de la lista."); return; }
             int id = Convert.ToInt32(f.Cells["id_ingrediente"].Value);
-            bool actual = Convert.ToBoolean(f.Cells["disponible"].Value);
-            if (ErroresUi.Intentar(Shell, () => _ingredienteDao.CambiarDisponibilidad(id, !actual)))
+            string nombre = Convert.ToString(f.Cells["Ingrediente"].Value) ?? "";
+            int recetas = Convert.ToInt32(f.Cells["En recetas"].Value);
+            if (!disponible && recetas > 0 &&
+                !Dialogo.Confirmar(Shell, $"Marcar \"{nombre}\" como agotado",
+                    $"Forma parte de {recetas} receta(s). En caja ya no se podrá agregar como extra y las cajeras deberán ofrecer quitarlo (SIN) de esas especialidades.\n\n¿Continuar?",
+                    "Sí, marcar agotado", "Cancelar"))
+                return;
+            if (ErroresUi.Intentar(Shell, () => _ingredienteDao.CambiarDisponibilidad(id, disponible), "No se pudo cambiar el estado"))
                 ErroresUi.Intentar(Shell, CargarIngredientes);
         }
 
@@ -261,7 +435,7 @@ namespace POS_PizzeriaRhinos.Vistas
             int enRecetas = Convert.ToInt32(f.Cells["En recetas"].Value);
             if (enRecetas > 0)
             {
-                Dialogo.Advertencia(Shell, $"\"{nombre}\" forma parte de {enRecetas} receta(s). Para dejar de usarlo márcalo como NO HAY.", "No se puede eliminar");
+                Dialogo.Advertencia(Shell, $"\"{nombre}\" forma parte de {enRecetas} receta(s). Para dejar de usarlo márcalo como Agotado, o quítalo primero de esas recetas en Productos.", "No se puede eliminar");
                 return;
             }
             if (!Dialogo.Confirmar(Shell, "Eliminar ingrediente", $"¿Eliminar \"{nombre}\" del catálogo?", "Sí, eliminar", "Cancelar", peligro: true)) return;
@@ -365,6 +539,51 @@ namespace POS_PizzeriaRhinos.Vistas
             decimal nuevo = frm.ValorNumero;
             if (ErroresUi.Intentar(Shell, () => _productoDao.ActualizarPrecio(idPp, nuevo), "No se pudo cambiar el precio"))
                 ErroresUi.Intentar(Shell, CargarProductos);
+        }
+
+        private void NuevoProducto()
+        {
+            // Si se está viendo una categoría, el producto nuevo arranca en esa categoría
+            string cat = _grpCategoria.Valor as string ?? "";
+            if (cat is not ("PIZZA" or "CALZONE" or "COMPLEMENTO" or "BEBIDA")) cat = "PIZZA";
+            using var frm = new FrmProducto(null, cat);
+            if (frm.ShowDialog(Shell) != DialogResult.OK) return;
+            ErroresUi.Intentar(Shell, CargarProductos);
+            Dialogo.Exito(Shell, "El producto quedó dado de alta y ya aparece en el punto de venta.", "Producto creado");
+        }
+
+        private void EditarProducto()
+        {
+            var f = _tablaProd.FilaSeleccionada;
+            if (f == null) { Dialogo.Info(Shell, "Selecciona un producto de la lista."); return; }
+            int idProd = Convert.ToInt32(f.Cells["id_producto"].Value);
+            Modelos.ProductoEdicion? prod = null;
+            if (!ErroresUi.Intentar(Shell, () => prod = _productoDao.ObtenerProductoEdicion(idProd), "No se pudo leer el producto") || prod == null) return;
+            using var frm = new FrmProducto(prod);
+            if (frm.ShowDialog(Shell) == DialogResult.OK) ErroresUi.Intentar(Shell, CargarProductos);
+        }
+
+        private void RenombrarProducto()
+        {
+            var f = _tablaProd.FilaSeleccionada;
+            if (f == null) { Dialogo.Info(Shell, "Selecciona un producto de la lista."); return; }
+            int idProd = Convert.ToInt32(f.Cells["id_producto"].Value);
+            string actual = Convert.ToString(f.Cells["Producto"].Value) ?? "";
+            string categoria = Convert.ToString(f.Cells["Categoría"].Value) ?? "";
+            using var frm = new FrmEntrada("Renombrar producto", "Nombre del producto (se cambia en todos sus tamaños)", actual, ModoEntrada.Texto, 80);
+            if (frm.ShowDialog(Shell) != DialogResult.OK) return;
+            string nuevo = frm.ValorTexto;
+            if (nuevo == actual) return;
+            ErroresUi.Intentar(Shell, () =>
+            {
+                if (_productoDao.ExisteNombre(nuevo, categoria, idProd))
+                {
+                    Dialogo.Advertencia(Shell, $"Ya existe un producto llamado \"{nuevo}\" en esta categoría.", "Nombre repetido");
+                    return;
+                }
+                _productoDao.RenombrarProducto(idProd, nuevo);
+                CargarProductos();
+            }, "No se pudo renombrar el producto");
         }
 
         private void AlternarProducto()

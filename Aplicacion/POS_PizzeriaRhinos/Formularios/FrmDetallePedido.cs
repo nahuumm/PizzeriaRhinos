@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.ComponentModel;
 using System.Data;
 using System.Drawing;
@@ -16,6 +16,11 @@ namespace POS_PizzeriaRhinos.Formularios
     {
         private readonly CabeceraPedido _cab;
         private readonly DataTable _detalle;
+        private readonly PedidoDAO _pedidoDao = new();
+        private ComboBox? _cmbRepartidor;
+
+        /// <summary>True si desde esta ventana se cambió el estado del pedido (la lista debe recargarse).</summary>
+        public bool HuboCambios { get; private set; }
 
         private FrmDetallePedido(CabeceraPedido cab, DataTable detalle)
         {
@@ -78,12 +83,17 @@ namespace POS_PizzeriaRhinos.Formularios
 
             var cuerpo = new Panel { Dock = DockStyle.Fill, Padding = UITheme.P(18) };
             Diseno.Apilar(cuerpo, tabla, encabezado, Diseno.Espacio(12), info, Diseno.Espacio(12));
+            cuerpo.Controls.Add(CrearPanelActualizar()); // queda arriba de la barra de botones
             cuerpo.Controls.Add(barra);
             Controls.Add(cuerpo);
 
             // El enlace de datos se hace en Load: hasta entonces la tabla no pertenece a un formulario y no genera columnas
             Load += (_, _) =>
             {
+                // Calzones: Chico / Mediano / Grande / Extra grande
+                if (detalle.Columns.Contains("Categoria") && detalle.Columns.Contains("Tamaño"))
+                    foreach (DataRow r in detalle.Rows)
+                        r["Tamaño"] = UITheme.NombreTamano(Convert.ToString(r["Categoria"]), Convert.ToString(r["Tamaño"]));
                 tabla.Mostrar(detalle, "Este pedido no tiene partidas registradas.");
                 UITheme.OcultarColumnas(tabla.Grid, "ID_Detalle", "Categoria", "Variante");
                 UITheme.FormatoMoneda(tabla.Grid, "Subtotal_Linea");
@@ -105,8 +115,123 @@ namespace POS_PizzeriaRhinos.Formularios
             };
         }
 
-        /// <summary>Carga y muestra el detalle del folio indicado.</summary>
-        public static void Mostrar(IWin32Window owner, int folio)
+        // =====================================================================
+        // ACTUALIZAR ESTADO DEL PEDIDO
+        // DOMICILIO: EN_PREPARACION → EN_RUTA (sp_asignar_repartidor_pedido) → ENTREGADO
+        // MOSTRADOR: EN_PREPARACION → ENTREGADO · Cualquiera activo → CANCELADO (regresa stock de bebidas)
+        // =====================================================================
+        private Control CrearPanelActualizar()
+        {
+            var card = new PanelRedondeado { Dock = DockStyle.Bottom, Height = UITheme.S(96), Padding = UITheme.P(14, 10, 14, 10), Margin = new Padding(0) };
+            var flow = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, AutoScroll = true };
+            var lbl = new Label
+            {
+                Text = "Actualizar pedido:",
+                Font = UITheme.Titulo(14f),
+                ForeColor = UITheme.Texto,
+                AutoSize = false,
+                Size = UITheme.S(190, 64),
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+            flow.Controls.Add(lbl);
+
+            string estado = _cab.Estado.ToUpperInvariant();
+            bool domicilio = _cab.TipoServicio == "DOMICILIO";
+
+            if (estado == "EN_PREPARACION" && domicilio)
+            {
+                _cmbRepartidor = new ComboBox { Width = UITheme.S(240), Margin = UITheme.P(4, 16, 8, 4) };
+                UITheme.EstilizarCombo(_cmbRepartidor);
+                try
+                {
+                    var lista = new System.Collections.Generic.List<OpcionRep> { new(0, "— Repartidor que sale —") };
+                    foreach (var r in new EmpleadoDAO().ObtenerRepartidoresActivos()) lista.Add(new OpcionRep(r.IdEmpleado, r.Nombre));
+                    _cmbRepartidor.DataSource = lista;
+                    _cmbRepartidor.DisplayMember = nameof(OpcionRep.Texto);
+                    _cmbRepartidor.ValueMember = nameof(OpcionRep.Id);
+                }
+                catch (Exception ex)
+                {
+                    lbl.Text = "Sin repartidores: " + ErroresUi.Amigable(ex).Split('\n')[0];
+                }
+                var btnDespachar = new BotonRhino("Despachar a ruta", EstiloBoton.Azul, "🛵") { Size = UITheme.S(210, 64) };
+                btnDespachar.Click += (_, _) => Despachar();
+                flow.Controls.Add(_cmbRepartidor);
+                flow.Controls.Add(btnDespachar);
+            }
+            if ((estado == "EN_RUTA" && domicilio) || (estado == "EN_PREPARACION" && !domicilio))
+            {
+                var btnEntregado = new BotonRhino("Marcar entregado", EstiloBoton.Exito, "✔") { Size = UITheme.S(210, 64) };
+                btnEntregado.Click += (_, _) => CambiarEstado("ENTREGADO");
+                flow.Controls.Add(btnEntregado);
+            }
+            if (estado == "EN_PREPARACION" || estado == "EN_RUTA")
+            {
+                var btnCancelar = new BotonRhino("Cancelar pedido", EstiloBoton.Peligro, "✖") { Size = UITheme.S(200, 64) };
+                btnCancelar.Click += (_, _) => CambiarEstado("CANCELADO");
+                flow.Controls.Add(btnCancelar);
+            }
+            else
+            {
+                flow.Controls.Add(new Label
+                {
+                    Text = $"El pedido ya está {UITheme.ColorEstado(estado).etiqueta.ToLowerInvariant()}; no admite más cambios.",
+                    AutoSize = false,
+                    Size = UITheme.S(560, 64),
+                    TextAlign = ContentAlignment.MiddleLeft,
+                    Font = UITheme.Fuente(11f),
+                    ForeColor = UITheme.TextoSuave
+                });
+            }
+
+            card.Controls.Add(flow);
+            var contenedor = new Panel { Dock = DockStyle.Bottom, Height = UITheme.S(96 + 10) };
+            card.Dock = DockStyle.Top;
+            contenedor.Controls.Add(card);
+            return contenedor;
+        }
+
+        private void Despachar()
+        {
+            if (_cmbRepartidor?.SelectedValue is not int idRep || idRep <= 0)
+            {
+                Dialogo.Advertencia(this, "Elige al repartidor que va a salir con el pedido.", "Falta el repartidor");
+                _cmbRepartidor?.Focus();
+                return;
+            }
+            string nombre = _cmbRepartidor.Text;
+            if (ErroresUi.Intentar(this, () => _pedidoDao.AsignarRepartidorSP(_cab.Folio, idRep), "No se pudo despachar"))
+                Terminar($"El pedido #{_cab.Folio} salió a ruta con {nombre}.", "Pedido despachado");
+        }
+
+        private void CambiarEstado(string nuevo)
+        {
+            if (nuevo == "CANCELADO" &&
+                !Dialogo.Confirmar(this, $"Cancelar pedido #{_cab.Folio}",
+                    "El pedido quedará CANCELADO y no se podrá reactivar. Las bebidas regresarán al inventario.\n\n¿Confirmas la cancelación?",
+                    "Sí, cancelar pedido", "No", peligro: true))
+                return;
+            if (nuevo == "ENTREGADO" &&
+                !Dialogo.Confirmar(this, $"Entregar pedido #{_cab.Folio}", "¿El pedido ya fue entregado al cliente?", "Sí, entregado", "No"))
+                return;
+
+            if (ErroresUi.Intentar(this, () => _pedidoDao.ActualizarEstadoPedido(_cab.Folio, nuevo), "No se pudo actualizar el pedido"))
+                Terminar(nuevo == "CANCELADO" ? $"El pedido #{_cab.Folio} fue cancelado." : $"El pedido #{_cab.Folio} quedó entregado.",
+                         "Pedido actualizado");
+        }
+
+        private void Terminar(string mensaje, string titulo)
+        {
+            HuboCambios = true;
+            Dialogo.Exito(this, mensaje, titulo);
+            DialogResult = DialogResult.OK;
+            Close();
+        }
+
+        private sealed record OpcionRep(int Id, string Texto);
+
+        /// <summary>Carga y muestra el detalle del folio indicado. Devuelve true si se actualizó el estado del pedido.</summary>
+        public static bool Mostrar(IWin32Window owner, int folio)
         {
             CabeceraPedido? cab = null;
             DataTable? det = null;
@@ -115,14 +240,15 @@ namespace POS_PizzeriaRhinos.Formularios
                     cab = new ReporteDAO().ObtenerCabecera(folio);
                     det = new PedidoDAO().ObtenerDetallePedido(folio);
                 }, "No se pudo cargar el pedido"))
-                return;
+                return false;
             if (cab == null || det == null)
             {
                 Dialogo.Advertencia(owner, $"No se encontró el pedido #{folio}.", "Pedido no encontrado");
-                return;
+                return false;
             }
             using var frm = new FrmDetallePedido(cab, det);
             frm.ShowDialog(owner);
+            return frm.HuboCambios;
         }
     }
 }

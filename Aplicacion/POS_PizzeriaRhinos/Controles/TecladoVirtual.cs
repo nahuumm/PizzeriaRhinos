@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
@@ -91,6 +91,13 @@ namespace POS_PizzeriaRhinos.Controles
                 tb.Enter += (_, _) => _objetivo = tb;
             }
             if (_objetivo == null && cuadros.Length > 0) _objetivo = cuadros[0];
+        }
+
+        /// <summary>Olvida los cuadros vinculados (cuando el formulario reconstruye sus campos).</summary>
+        public void LimpiarVinculos()
+        {
+            _vinculados.Clear();
+            _objetivo = null;
         }
 
         private void CambiarMayusculas(bool valor)
